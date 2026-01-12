@@ -2,15 +2,16 @@
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
-    <AssemblyName>Jellyfin.Plugin.TmdbBoxsetMetadataForCollections</AssemblyName>
-    <RootNamespace>Jellyfin.Plugin.TmdbBoxsetMetadataForCollections</RootNamespace>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="MediaBrowser.Common" Version="10.11.5" />
-    <PackageReference Include="MediaBrowser.Controller" Version="10.11.5" />
+    <PackageReference Include="Jellyfin.Controller" Version="10.11.5" />
     <PackageReference Include="Jellyfin.Model" Version="10.11.5" />
+    <PackageReference Include="Jellyfin.Common" Version="10.11.5" />
+    <PackageReference Include="Jellyfin.Server" Version="10.11.5" />
   </ItemGroup>
 
 </Project>
