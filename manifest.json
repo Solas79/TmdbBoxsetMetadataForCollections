@@ -1,9 +1,7 @@
 {
-  "category": "Metadata",
-  "name": "TMDb Boxset Metadata For Collections",
-  "guid": "a9a6db5c-9fd3-44c0-b36a-8a26a9e4b1b5",
+  "id": "b11c1cde-4c6e-4c55-b4a5-5a4b95f7c801",
+  "name": "TMDb Boxset Metadata for Collections",
   "version": "1.0.0",
-  "description": "Automatically applies TMDb Boxset metadata to existing Jellyfin collections based on their movies.",
-  "owner": "Solas79",
+  "description": "Automatically assigns TMDb boxset metadata to existing Jellyfin collections based on their movies.",
   "targetAbi": "10.11.5.0"
 }
