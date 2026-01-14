@@ -8,12 +8,12 @@
     "description": "Wenn Filme in einer Collection eine TMDb-Collection-ID haben, wird diese auf die Collection übertragen, sodass Jellyfin Boxset-Metadaten laden kann.",
     "versions": [
       {
-        "version": "0.0.2.0",
+        "version": "0.0.3.0",
         "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/Solas79/TmdbBoxsetMetadataForCollections/releases/download/v0.0.2/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip",
-        "checksum": "6939249755ae67ff2c81ec2d94a312ed",
-        "timestamp": "2026-01-14T20:57:03Z",
-        "changelog": "Automatischer Build für v0.0.2 (Jellyfin 10.11.x)"
+        "sourceUrl": "https://github.com/Solas79/TmdbBoxsetMetadataForCollections/releases/download/v0.0.3/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip",
+        "checksum": "42b49412a414bca15e398fc896d6deff",
+        "timestamp": "2026-01-14T21:19:08Z",
+        "changelog": "Automatischer Build für v0.0.3 (Jellyfin 10.11.x)"
       }
     ]
   }
