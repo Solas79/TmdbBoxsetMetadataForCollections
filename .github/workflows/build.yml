@@ -1,13 +1,17 @@
-name: Build Jellyfin Plugin
+name: Build & Release Jellyfin Plugin
 
 on:
   push:
-    branches: [ "main" ]
+    tags:
+      - "v*.*.*"
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -34,8 +38,24 @@ jobs:
           cd publish
           zip -r ../TmdbBoxsetMetadataForCollections.zip *
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Calculate SHA256
+        run: |
+          SHA=$(sha256sum TmdbBoxsetMetadataForCollections.zip | cut -d ' ' -f1)
+          echo "PLUGIN_SHA=$SHA" >> $GITHUB_ENV
+
+      - name: Update repository.json
+        run: |
+          sed -i "s/WIRD_AUTOMATISCH_ERSETZT/${PLUGIN_SHA}/g" repository.json
+
+      - name: Commit repository.json
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add repository.json
+          git commit -m "Update repository.json for release ${{ github.ref_name }}"
+          git push
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: TmdbBoxsetMetadataForCollections
-          path: TmdbBoxsetMetadataForCollections.zip
+          files: TmdbBoxsetMetadataForCollections.zip
