@@ -1,3 +1,4 @@
+using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
@@ -39,7 +40,7 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
             var movies = _libraryManager.GetItemList(new InternalItemsQuery
             {
                 ParentId = collection.Id,
-                IncludeItemTypes = new[] { nameof(Movie) },
+                IncludeItemTypes = new[] { BaseItemKind.Movie }, // Jellyfin 10.11: Enum statt string[]
                 Recursive = true
             }).OfType<Movie>().ToList();
 
@@ -61,6 +62,7 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
 
             _logger.LogInformation("Applying TMDbCollectionId {Id} to {Name}", tmdbCollectionId, collection.Name);
 
+            // ProviderId auf die Collection setzen (Jellyfin kann danach Boxset-Metadaten ziehen)
             collection.SetProviderId(MetadataProvider.TmdbCollection, tmdbCollectionId);
 
             return new MetadataResult<CollectionFolder>
