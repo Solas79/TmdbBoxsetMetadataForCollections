@@ -16,31 +16,26 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
         public string Description =>
             "Automatically assigns TMDb boxset metadata to existing Jellyfin collections based on their movies.";
 
-        // Jellyfin erwartet eine Version am Plugin-Objekt
         public Version Version => ThisAssembly.GetName().Version ?? new Version(0, 0, 0, 0);
 
-        // Jellyfin nutzt das für Uninstall/Diagnose
         public string AssemblyFilePath => ThisAssembly.Location;
 
-        // Datapath: wenn du keinen brauchst, leer lassen (nicht null!)
         public string DataFolderPath => string.Empty;
 
-        // Ohne spezielle Uninstall-Logik: false (verhindert, dass Jellyfin in BasePlugin-NRE läuft)
         public bool CanUninstall => true;
 
-        // Plugin-Info fürs UI
         public PluginInfo GetPluginInfo()
         {
-            return new PluginInfo
-            {
-                Name = Name,
-                Version = Version.ToString(),
-                Description = Description,
-                Id = Id.ToString()
-            };
+            // Signatur: PluginInfo(string name, Version version, string description, Guid id, bool canUninstall)
+            return new PluginInfo(
+                Name,
+                Version,
+                Description,
+                Id,
+                CanUninstall
+            );
         }
 
-        // Wird beim Deinstallieren aufgerufen – wir brauchen nichts
         public void OnUninstalling()
         {
         }
