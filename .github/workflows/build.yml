@@ -1,13 +1,13 @@
-name: Build & Release Jellyfin Plugin
+name: Build and Release Jellyfin Plugin
 
 on:
   push:
     tags:
-      - "v*.*.*"
+      - 'v*'              # z. B. v0.0.1
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: write         # nötig für Release + Push auf main
 
 jobs:
   build:
@@ -20,45 +20,40 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Setup .NET 9
+      - name: Setup .NET 9 (für Jellyfin 10.11)
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: '9.0.x'
 
       - name: Restore
         run: dotnet restore Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj
 
-      - name: Build
-        run: dotnet build Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj -c Release --no-restore
+      - name: Build (DLL only, no publish)
+        run: dotnet build Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj --configuration Release --no-restore
 
-      # Wir packen nur die DLL + manifest.json in die ZIP (minimal & stabil)
-      - name: Package plugin zip
+      - name: Package new plugin (10.11 build)
         shell: bash
         run: |
           set -e
           OUTDIR=out
           DLL=Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/bin/Release/net9.0/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.dll
-          ZIP=Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip
-
           mkdir -p "$OUTDIR"
           cp "$DLL" "$OUTDIR"/
-          cp manifest.json "$OUTDIR"/
+          (cd "$OUTDIR" && zip -9r Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.dll)
+          ls -l "$OUTDIR"
 
-          (cd "$OUTDIR" && zip -9r "../$ZIP" Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.dll manifest.json)
-          ls -l
-
-      - name: Compute MD5 checksum for ZIP (lowercase)
+      - name: Compute MD5 checksum for new ZIP (lowercase)
         id: md5
         shell: bash
         run: |
-          ZIP=Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip
-          echo "md5=$(md5sum "$ZIP" | awk '{print tolower($1)}')" >> $GITHUB_OUTPUT
+          echo "md5=$(md5sum out/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip | awk '{print tolower($1)}')" >> $GITHUB_OUTPUT
 
-      - name: Generate repository manifest (manifest.json for Jellyfin repo URL)
+      - name: Generate manifest.json (nur 10.11.x)
+        id: manifest
         shell: bash
         run: |
-          NEW_TAG="${GITHUB_REF_NAME}"       # z.B. v0.0.1
-          NEW_VERSION="${NEW_TAG#v}.0"       # v0.0.1 -> 0.0.1.0
+          NEW_TAG="${GITHUB_REF_NAME}"          # z. B. v0.0.1
+          NEW_VERSION="${NEW_TAG#v}.0"          # v0.0.1 -> 0.0.1.0
           NEW_ABI="10.11.0.0"
           NEW_URL="https://github.com/${{ github.repository }}/releases/download/${NEW_TAG}/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip"
           NEW_CHECKSUM="${{ steps.md5.outputs.md5 }}"
@@ -90,17 +85,18 @@ jobs:
 
           cat manifest.json
 
-      - name: Create / Update GitHub Release (attach ZIP)
+      - name: Create / Update GitHub Release (attach new ZIP + manifest.json)
         uses: softprops/action-gh-release@v2
         with:
           name: TMDb Boxset Metadata for Collections ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
           files: |
-            Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip
+            out/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip
+            manifest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Commit manifest.json to main (so Jellyfin repo URL bleibt aktuell)
+      - name: Commit manifest.json to main
         shell: bash
         run: |
           set -e
