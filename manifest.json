@@ -10,10 +10,10 @@
       {
         "version": "0.0.2.0",
         "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/Solas79/TmdbBoxsetMetadataForCollections/releases/download/v0.0.1/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip",
-        "checksum": "dd8d13e9b4361c0fbcaa5ee6f4930a1c",
-        "timestamp": "2026-01-14T20:09:49Z",
-        "changelog": "Automatischer Build für v0.0.1 (Jellyfin 10.11.x)"
+        "sourceUrl": "https://github.com/Solas79/TmdbBoxsetMetadataForCollections/releases/download/v0.0.2/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip",
+        "checksum": "6939249755ae67ff2c81ec2d94a312ed",
+        "timestamp": "2026-01-14T20:57:03Z",
+        "changelog": "Automatischer Build für v0.0.2 (Jellyfin 10.11.x)"
       }
     ]
   }
