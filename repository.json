@@ -6,12 +6,12 @@
     {
       "name": "TMDb Boxset Metadata for Collections",
       "guid": "b11c1cde-4c6e-4c55-b4a5-5a4b95f7c801",
-      "version": "0.0.2",
+      "version": "0.0.4",
       "description": "Assigns TMDb boxset metadata to existing Jellyfin collections based on their movies.",
       "targetAbi": "10.11.5.0",
       "sourceUrl": "https://github.com/Solas79/TmdbBoxsetMetadataForCollections",
       "checksum": "ce63353f4f8a9d0831c20722a915e7cd58231205ff02cbd12c37bebcfc715b07",
-      "downloadUrl": "https://github.com/Solas79/TmdbBoxsetMetadataForCollections/releases/download/v1.0.0/TmdbBoxsetMetadataForCollections.zip"
+      "downloadUrl": "https://github.com/Solas79/TmdbBoxsetMetadataForCollections/releases/download/v0.0.4/TmdbBoxsetMetadataForCollections.zip"
     }
   ]
 }
