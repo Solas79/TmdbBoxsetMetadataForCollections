@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
 {
-    public class TmdbCollectionMetadataProvider : IMetadataProvider<CollectionFolder>
+    public class TmdbCollectionMetadataProvider : IMetadataProvider<BoxSet>
     {
         private readonly ILibraryManager _libraryManager;
         private readonly ILogger<TmdbCollectionMetadataProvider> _logger;
@@ -27,49 +27,60 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
 
         public string Name => "TMDb Boxset Metadata Provider for Collections";
 
-        public async Task<MetadataResult<CollectionFolder>> GetMetadata(
-            CollectionFolder collection,
+        public Task<MetadataResult<BoxSet>> GetMetadata(
+            BoxSet boxSet,
             CancellationToken cancellationToken)
         {
-            // Wenn die Collection bereits eine TMDb Boxset ID hat → nichts tun
-            if (!string.IsNullOrWhiteSpace(collection.GetProviderId(MetadataProvider.TmdbCollection)))
-                return new MetadataResult<CollectionFolder> { Item = collection };
+            // Wenn bereits eine TMDb-Boxset-ID gesetzt ist → nichts tun
+            if (!string.IsNullOrWhiteSpace(boxSet.GetProviderId(MetadataProvider.TmdbCollection)))
+            {
+                _logger.LogDebug("BoxSet '{Name}' already has TMDbCollectionId", boxSet.Name);
+                return Task.FromResult(new MetadataResult<BoxSet> { Item = boxSet });
+            }
 
-            _logger.LogInformation("Scanning collection: {Name}", collection.Name);
+            _logger.LogInformation("Scanning BoxSet: {Name}", boxSet.Name);
 
+            // Filme in der Collection suchen
             var movies = _libraryManager.GetItemList(new InternalItemsQuery
             {
-                ParentId = collection.Id,
-                IncludeItemTypes = new[] { BaseItemKind.Movie }, // Jellyfin 10.11: Enum statt string[]
+                ParentId = boxSet.Id,
+                IncludeItemTypes = new[] { BaseItemKind.Movie },
                 Recursive = true
             }).OfType<Movie>().ToList();
 
             if (movies.Count == 0)
             {
-                _logger.LogInformation("Collection has no movies: {Name}", collection.Name);
-                return new MetadataResult<CollectionFolder> { Item = collection };
+                _logger.LogInformation("BoxSet '{Name}' contains no movies", boxSet.Name);
+                return Task.FromResult(new MetadataResult<BoxSet> { Item = boxSet });
             }
 
+            // Erste gefundene TMDbCollectionId aus den Filmen verwenden
             var tmdbCollectionId = movies
                 .Select(m => m.GetProviderId(MetadataProvider.TmdbCollection))
                 .FirstOrDefault(id => !string.IsNullOrWhiteSpace(id));
 
             if (tmdbCollectionId == null)
             {
-                _logger.LogInformation("No TMDbCollectionId found for {Name}", collection.Name);
-                return new MetadataResult<CollectionFolder> { Item = collection };
+                _logger.LogInformation(
+                    "No TMDbCollectionId found in movies for BoxSet '{Name}'",
+                    boxSet.Name);
+
+                return Task.FromResult(new MetadataResult<BoxSet> { Item = boxSet });
             }
 
-            _logger.LogInformation("Applying TMDbCollectionId {Id} to {Name}", tmdbCollectionId, collection.Name);
+            _logger.LogInformation(
+                "Applying TMDbCollectionId {Id} to BoxSet '{Name}'",
+                tmdbCollectionId,
+                boxSet.Name);
 
-            // ProviderId auf die Collection setzen (Jellyfin kann danach Boxset-Metadaten ziehen)
-            collection.SetProviderId(MetadataProvider.TmdbCollection, tmdbCollectionId);
+            // ID auf das BoxSet setzen
+            boxSet.SetProviderId(MetadataProvider.TmdbCollection, tmdbCollectionId);
 
-            return new MetadataResult<CollectionFolder>
+            return Task.FromResult(new MetadataResult<BoxSet>
             {
-                Item = collection,
+                Item = boxSet,
                 HasMetadata = true
-            };
+            });
         }
     }
 }
