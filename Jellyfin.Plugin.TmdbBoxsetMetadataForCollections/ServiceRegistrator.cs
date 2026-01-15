@@ -1,6 +1,6 @@
+using MediaBrowser.Controller;
 using MediaBrowser.Controller.Plugins;
 using Microsoft.Extensions.DependencyInjection;
-using Jellyfin.Server;
 
 namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
 {
