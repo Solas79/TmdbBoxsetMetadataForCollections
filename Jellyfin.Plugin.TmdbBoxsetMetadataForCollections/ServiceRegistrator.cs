@@ -1,6 +1,6 @@
+using Microsoft.Extensions.DependencyInjection;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Plugins;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
 {
@@ -8,7 +8,6 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
     {
         public void RegisterServices(IServiceCollection services, IServerApplicationHost applicationHost)
         {
-            // Metadata Provider registrieren
             services.AddTransient<TmdbCollectionMetadataProvider>();
         }
     }
