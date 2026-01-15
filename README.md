@@ -1,15 +1,16 @@
 # TMDb Boxset Metadata for Collections
 
-This Jellyfin plugin assigns TMDb boxset metadata to existing Jellyfin collections.
+For Jellyfin 10.11.x.
 
-If any movie inside a collection has a TMDb Collection ID, the plugin copies that ID to the collection.
-Jellyfin then automatically downloads the correct boxset metadata (poster, description, etc).
+This plugin copies the TMDb Collection (BoxSet) ID from movies into the Jellyfin BoxSet item, allowing Jellyfin to fetch metadata and images for the collection.
 
-Works with:
-- CollectionByFolder
-- Manual collections
-- Existing libraries
+## Install via Repository
+Add this repository URL in Jellyfin:
 
-No duplicate collections.
-No API keys.
-Fully Jellyfin-native.
+https://raw.githubusercontent.com/Solas79/TmdbBoxsetMetadataForCollections/main/manifest.json
+
+Then install from the Catalog and restart Jellyfin.
+
+## Usage
+- Run the scheduled task: "Scan library for TMDb Boxset IDs (Collections)"
+- Or open a collection and run "Refresh Metadata" with "Replace images".
