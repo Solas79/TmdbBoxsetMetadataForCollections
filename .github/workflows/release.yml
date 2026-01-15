@@ -3,7 +3,7 @@ name: Build and Release Jellyfin Plugin
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
 
 permissions:
@@ -23,13 +23,13 @@ jobs:
       - name: Setup .NET 9
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.0.x'
+          dotnet-version: "9.0.x"
 
       - name: Derive version from tag
         shell: bash
         run: |
-          TAG="${GITHUB_REF_NAME}"     # v0.0.5
-          VER="${TAG#v}.0"             # 0.0.5.0
+          TAG="${GITHUB_REF_NAME}"     # z.B. v0.0.7
+          VER="${TAG#v}.0"             # -> 0.0.7.0
           echo "PLUGIN_VERSION=$VER" >> $GITHUB_ENV
           echo "Using version: $VER"
 
@@ -39,8 +39,9 @@ jobs:
         run: dotnet restore Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj
 
       - name: Build (DLL only)
+        env:
+          NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: dotnet build Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj -c Release --no-restore /p:Version=${{ env.PLUGIN_VERSION }} /p:AssemblyVersion=${{ env.PLUGIN_VERSION }} /p:FileVersion=${{ env.PLUGIN_VERSION }}
-
 
       - name: Package plugin zip (DLL only)
         shell: bash
@@ -48,9 +49,11 @@ jobs:
           set -e
           OUTDIR=out
           DLL=Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/bin/Release/net9.0/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.dll
+          ZIP=Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip
+
           mkdir -p "$OUTDIR"
           cp "$DLL" "$OUTDIR"/
-          (cd "$OUTDIR" && zip -9r Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.dll)
+          (cd "$OUTDIR" && zip -9r "$ZIP" Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.dll)
           ls -l "$OUTDIR"
 
       - name: Compute MD5 checksum for ZIP (lowercase)
@@ -62,8 +65,8 @@ jobs:
       - name: Generate manifest.json
         shell: bash
         run: |
-          NEW_TAG="${GITHUB_REF_NAME}"
-          NEW_VERSION="${NEW_TAG#v}.0"
+          NEW_TAG="${GITHUB_REF_NAME}"          # v0.0.7
+          NEW_VERSION="${NEW_TAG#v}.0"          # 0.0.7.0
           NEW_ABI="10.11.0.0"
           NEW_URL="https://github.com/${{ github.repository }}/releases/download/${NEW_TAG}/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip"
           NEW_CHECKSUM="${{ steps.md5.outputs.md5 }}"
