@@ -39,13 +39,8 @@ jobs:
         run: dotnet restore Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj
 
       - name: Build (DLL only)
-        env:
-          NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: dotnet build Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj \
-              --configuration Release --no-restore \
-              /p:Version=${{ env.PLUGIN_VERSION }} \
-              /p:AssemblyVersion=${{ env.PLUGIN_VERSION }} \
-              /p:FileVersion=${{ env.PLUGIN_VERSION }}
+        run: dotnet build Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj -c Release --no-restore /p:Version=${{ env.PLUGIN_VERSION }} /p:AssemblyVersion=${{ env.PLUGIN_VERSION }} /p:FileVersion=${{ env.PLUGIN_VERSION }}
+
 
       - name: Package plugin zip (DLL only)
         shell: bash
