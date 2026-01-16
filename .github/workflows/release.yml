@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  packages: read
 
 jobs:
   build:
@@ -25,15 +26,15 @@ jobs:
         with:
           dotnet-version: "9.0.x"
 
-      - name: Add Jellyfin GitHub Packages source
+      - name: Authenticate Jellyfin NuGet source (NuGet.config)
         shell: bash
         run: |
-          dotnet nuget remove source jellyfin >/dev/null 2>&1 || true
-          dotnet nuget add source "https://nuget.pkg.github.com/jellyfin/index.json" \
-            --name jellyfin \
+          dotnet nuget update source jellyfin \
             --username "github-actions" \
             --password "${{ secrets.GITHUB_TOKEN }}" \
-            --store-password-in-clear-text
+            --store-password-in-clear-text \
+            --configfile NuGet.config
+
 
 
       - name: Derive version from tag
@@ -45,10 +46,10 @@ jobs:
           echo "Using version: $VER"
 
       - name: Restore
-        run: dotnet restore Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj
+        run: dotnet restore Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj --configfile NuGet.config
 
-      - name: Build (DLL only)
-        run: dotnet build Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj -c Release --no-restore /p:Version=${{ env.PLUGIN_VERSION }} /p:AssemblyVersion=${{ env.PLUGIN_VERSION }} /p:FileVersion=${{ env.PLUGIN_VERSION }}
+      - name: Build
+        run: dotnet build Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj -c Release --no-restore --configfile NuGet.config /p:Version=${{ env.PLUGIN_VERSION }} /p:AssemblyVersion=${{ env.PLUGIN_VERSION }} /p:FileVersion=${{ env.PLUGIN_VERSION }}
 
       - name: Package plugin zip (folder + dll)
         shell: bash
