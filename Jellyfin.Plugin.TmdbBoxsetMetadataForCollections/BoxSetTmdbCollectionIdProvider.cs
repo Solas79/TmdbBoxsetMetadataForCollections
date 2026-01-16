@@ -2,26 +2,22 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Providers;
-using MediaBrowser.Model.Providers;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
 {
-    /// <summary>
-    /// Runs when Jellyfin refreshes metadata for a BoxSet (collection).
-    /// If the BoxSet has no TMDbCollection id, it copies the first one found in contained movies.
-    /// </summary>
     public sealed class BoxSetTmdbCollectionIdProvider : IMetadataProvider<BoxSet>
     {
+        private const string TmdbCollectionKey = "TmdbCollection";
+
         private readonly ILibraryManager _libraryManager;
         private readonly ILogger<BoxSetTmdbCollectionIdProvider> _logger;
 
-        public BoxSetTmdbCollectionIdProvider(
-            ILibraryManager libraryManager,
-            ILogger<BoxSetTmdbCollectionIdProvider> logger)
+        public BoxSetTmdbCollectionIdProvider(ILibraryManager libraryManager, ILogger<BoxSetTmdbCollectionIdProvider> logger)
         {
             _libraryManager = libraryManager;
             _logger = logger;
@@ -31,15 +27,14 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
 
         public Task<MetadataResult<BoxSet>> GetMetadata(BoxSet item, CancellationToken cancellationToken)
         {
-            // If already set: nothing to do
-            var existing = item.GetProviderId(MetadataProvider.TmdbCollection);
-            if (!string.IsNullOrWhiteSpace(existing))
+            // bereits gesetzt?
+            if (TryGetProviderId(item, TmdbCollectionKey, out var existing) && !string.IsNullOrWhiteSpace(existing))
             {
-                _logger.LogDebug("[TBMFC] BoxSet '{Name}' already has TMDbCollectionId={Id}", item.Name, existing);
+                _logger.LogDebug("[TBMFC] BoxSet '{Name}' already has {Key}={Id}", item.Name, TmdbCollectionKey, existing);
                 return Task.FromResult(new MetadataResult<BoxSet> { Item = item, HasMetadata = false });
             }
 
-            // Find movies in this BoxSet
+            // Movies im BoxSet finden
             var movies = _libraryManager.GetItemList(new InternalItemsQuery
             {
                 ParentId = item.Id,
@@ -48,23 +43,33 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
             }).OfType<Movie>();
 
             var tmdbCollectionId = movies
-                .Select(m => m.GetProviderId(MetadataProvider.TmdbCollection))
+                .Select(m => TryGetProviderId(m, TmdbCollectionKey, out var id) ? id : null)
                 .FirstOrDefault(id => !string.IsNullOrWhiteSpace(id));
 
             if (string.IsNullOrWhiteSpace(tmdbCollectionId))
             {
-                _logger.LogInformation("[TBMFC] No TMDbCollectionId found in movies for BoxSet '{Name}'", item.Name);
+                _logger.LogInformation("[TBMFC] No {Key} found in movies for BoxSet '{Name}'", TmdbCollectionKey, item.Name);
                 return Task.FromResult(new MetadataResult<BoxSet> { Item = item, HasMetadata = false });
             }
 
-            item.SetProviderId(MetadataProvider.TmdbCollection, tmdbCollectionId);
-            _logger.LogInformation("[TBMFC] Set TMDbCollectionId={Id} on BoxSet '{Name}'", tmdbCollectionId, item.Name);
+            SetProviderId(item, TmdbCollectionKey, tmdbCollectionId);
+            _logger.LogInformation("[TBMFC] Set {Key}={Id} on BoxSet '{Name}'", TmdbCollectionKey, tmdbCollectionId, item.Name);
 
-            return Task.FromResult(new MetadataResult<BoxSet>
-            {
-                Item = item,
-                HasMetadata = true
-            });
+            return Task.FromResult(new MetadataResult<BoxSet> { Item = item, HasMetadata = true });
+        }
+
+        private static bool TryGetProviderId(BaseItem item, string key, out string? value)
+        {
+            value = null;
+            if (item?.ProviderIds == null) return false;
+            if (!item.ProviderIds.TryGetValue(key, out var v)) return false;
+            value = v;
+            return true;
+        }
+
+        private static void SetProviderId(BaseItem item, string key, string value)
+        {
+            item.ProviderIds[key] = value;
         }
     }
 }
