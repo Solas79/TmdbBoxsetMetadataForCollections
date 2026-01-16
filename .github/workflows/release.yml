@@ -1,0 +1,132 @@
+name: Build and Release Jellyfin Plugin
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout (vollständig, für Push auf main)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Derive version from tag
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"     # z.B. v0.0.7
+          VER="${TAG#v}.0"             # -> 0.0.7.0
+          echo "PLUGIN_VERSION=$VER" >> $GITHUB_ENV
+          echo "Using version: $VER"
+
+      - name: Restore
+        env:
+          NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: dotnet restore Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj
+
+      - name: Build (DLL only)
+        env:
+          NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: dotnet build Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj -c Release --no-restore /p:Version=${{ env.PLUGIN_VERSION }} /p:AssemblyVersion=${{ env.PLUGIN_VERSION }} /p:FileVersion=${{ env.PLUGIN_VERSION }}
+
+      - name: Package plugin zip (DLL only)
+        shell: bash
+        run: |
+          set -e
+          OUTDIR=out
+          DLL=Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/bin/Release/net9.0/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.dll
+          ZIP=Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip
+
+          mkdir -p "$OUTDIR"
+          cp "$DLL" "$OUTDIR"/
+          (cd "$OUTDIR" && zip -9r "$ZIP" Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.dll)
+          ls -l "$OUTDIR"
+
+      - name: Compute MD5 checksum for ZIP (lowercase)
+        id: md5
+        shell: bash
+        run: |
+          echo "md5=$(md5sum out/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip | awk '{print tolower($1)}')" >> $GITHUB_OUTPUT
+
+      - name: Generate manifest.json
+        shell: bash
+        run: |
+          NEW_TAG="${GITHUB_REF_NAME}"          # v0.0.7
+          NEW_VERSION="${NEW_TAG#v}.0"          # 0.0.7.0
+          NEW_ABI="10.11.0.0"
+          NEW_URL="https://github.com/${{ github.repository }}/releases/download/${NEW_TAG}/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip"
+          NEW_CHECKSUM="${{ steps.md5.outputs.md5 }}"
+          NEW_TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          NEW_CHANGELOG="Automatischer Build für ${NEW_TAG} (Jellyfin 10.11.x)"
+
+          cat > manifest.json <<JSON
+          [
+            {
+              "category": "Metadata",
+              "guid": "b11c1cde-4c6e-4c55-b4a5-5a4b95f7c801",
+              "name": "TMDb Boxset Metadata for Collections",
+              "owner": "Solas79",
+              "overview": "Assigns TMDb boxset metadata to existing Jellyfin collections based on their movies.",
+              "description": "Copies TMDb collection IDs from movies into BoxSets, enabling Jellyfin to download boxset metadata and images.",
+              "versions": [
+                {
+                  "version": "${NEW_VERSION}",
+                  "targetAbi": "${NEW_ABI}",
+                  "sourceUrl": "${NEW_URL}",
+                  "checksum": "${NEW_CHECKSUM}",
+                  "timestamp": "${NEW_TIMESTAMP}",
+                  "changelog": "${NEW_CHANGELOG}"
+                }
+              ]
+            }
+          ]
+          JSON
+
+          cat manifest.json
+
+      - name: Create / Update GitHub Release (attach ZIP + manifest.json)
+        uses: softprops/action-gh-release@v2
+        with:
+          name: TMDb Boxset Metadata for Collections ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          files: |
+            out/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip
+            manifest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Commit manifest.json to main
+        shell: bash
+        run: |
+          set -e
+          TMP="$(mktemp)"
+          cp -f manifest.json "$TMP"
+
+          git fetch origin main
+          git checkout -B main origin/main
+
+          mv -f "$TMP" manifest.json
+          git add manifest.json
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "Update manifest for ${GITHUB_REF_NAME}"
+            git push origin main
+          fi
