@@ -25,6 +25,16 @@ jobs:
         with:
           dotnet-version: "9.0.x"
 
+      - name: Add Jellyfin GitHub Packages source
+        shell: bash
+        run: |
+          dotnet nuget remove source jellyfin >/dev/null 2>&1 || true
+          dotnet nuget add source "https://nuget.pkg.github.com/jellyfin/index.json" \
+            --name jellyfin \
+            --username "github-actions" \
+            --password "${{ secrets.GITHUB_TOKEN }}" \
+            --store-password-in-clear-text
+
       - name: Derive version from tag
         shell: bash
         run: |
@@ -34,26 +44,25 @@ jobs:
           echo "Using version: $VER"
 
       - name: Restore
-        env:
-          NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: dotnet restore Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj
 
       - name: Build (DLL only)
-        env:
-          NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: dotnet build Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj -c Release --no-restore /p:Version=${{ env.PLUGIN_VERSION }} /p:AssemblyVersion=${{ env.PLUGIN_VERSION }} /p:FileVersion=${{ env.PLUGIN_VERSION }}
 
-      - name: Package plugin zip (DLL only)
+      - name: Package plugin zip (folder + dll)
         shell: bash
         run: |
           set -e
           OUTDIR=out
+          PLUGINFOLDER=Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
           DLL=Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/bin/Release/net9.0/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.dll
           ZIP=Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip
 
-          mkdir -p "$OUTDIR"
-          cp "$DLL" "$OUTDIR"/
-          (cd "$OUTDIR" && zip -9r "$ZIP" Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.dll)
+          rm -rf "$OUTDIR"
+          mkdir -p "$OUTDIR/$PLUGINFOLDER"
+          cp "$DLL" "$OUTDIR/$PLUGINFOLDER/"
+
+          (cd "$OUTDIR" && zip -9r "$ZIP" "$PLUGINFOLDER")
           ls -l "$OUTDIR"
 
       - name: Compute MD5 checksum for ZIP (lowercase)
@@ -65,8 +74,8 @@ jobs:
       - name: Generate manifest.json
         shell: bash
         run: |
-          NEW_TAG="${GITHUB_REF_NAME}"          # v0.0.7
-          NEW_VERSION="${NEW_TAG#v}.0"          # 0.0.7.0
+          NEW_TAG="${GITHUB_REF_NAME}"
+          NEW_VERSION="${NEW_TAG#v}.0"
           NEW_ABI="10.11.0.0"
           NEW_URL="https://github.com/${{ github.repository }}/releases/download/${NEW_TAG}/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip"
           NEW_CHECKSUM="${{ steps.md5.outputs.md5 }}"
@@ -80,8 +89,8 @@ jobs:
               "guid": "b11c1cde-4c6e-4c55-b4a5-5a4b95f7c801",
               "name": "TMDb Boxset Metadata for Collections",
               "owner": "Solas79",
-              "overview": "Assigns TMDb boxset metadata to existing Jellyfin collections based on their movies.",
-              "description": "Copies TMDb collection IDs from movies into BoxSets, enabling Jellyfin to download boxset metadata and images.",
+              "overview": "Copies TMDbCollection IDs from movies into BoxSets.",
+              "description": "Sets TMDbCollection on BoxSets and optionally triggers metadata/image refresh.",
               "versions": [
                 {
                   "version": "${NEW_VERSION}",
