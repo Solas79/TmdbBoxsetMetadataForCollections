@@ -4,10 +4,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Controller.Providers;
-using MediaBrowser.Model.Providers;
 using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
 
@@ -15,6 +14,8 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
 {
     public sealed class ScanTask : IScheduledTask
     {
+        private const string TmdbCollectionKey = "TmdbCollection";
+
         private readonly ILibraryManager _libraryManager;
         private readonly ILogger<ScanTask> _logger;
 
@@ -24,13 +25,9 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
             _logger = logger;
         }
 
-        // Jellyfin 10.11 erwartet Key
         public string Key => "TBMFC.ScanTask";
-
         public string Name => "Scan library for TMDb Boxset IDs (Collections)";
-
         public string Description => "Copies TMDb collection IDs from movies into BoxSets so metadata/images can be fetched.";
-
         public string Category => "TMDb Boxset Metadata for Collections";
 
         public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
@@ -50,8 +47,7 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var existing = bs.GetProviderId(MetadataProvider.TmdbCollection);
-                if (!string.IsNullOrWhiteSpace(existing))
+                if (TryGetProviderId(bs, TmdbCollectionKey, out var existing) && !string.IsNullOrWhiteSpace(existing))
                 {
                     done++;
                     progress.Report(total == 0 ? 100 : done * 100.0 / total);
@@ -66,13 +62,13 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
                 }).OfType<Movie>();
 
                 var id = movies
-                    .Select(m => m.GetProviderId(MetadataProvider.TmdbCollection))
+                    .Select(m => TryGetProviderId(m, TmdbCollectionKey, out var mid) ? mid : null)
                     .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
 
                 if (!string.IsNullOrWhiteSpace(id))
                 {
-                    bs.SetProviderId(MetadataProvider.TmdbCollection, id);
-                    _logger.LogInformation("[TBMFC] Set TMDbCollectionId={Id} on BoxSet '{Name}'", id, bs.Name);
+                    SetProviderId(bs, TmdbCollectionKey, id);
+                    _logger.LogInformation("[TBMFC] Set {Key}={Id} on BoxSet '{Name}'", TmdbCollectionKey, id, bs.Name);
                 }
 
                 done++;
@@ -83,7 +79,20 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
             _logger.LogInformation("[TBMFC] ScanTask finished. BoxSets scanned: {Count}", total);
         }
 
-        public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
-            => Array.Empty<TaskTriggerInfo>();
+        public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => Array.Empty<TaskTriggerInfo>();
+
+        private static bool TryGetProviderId(BaseItem item, string key, out string? value)
+        {
+            value = null;
+            if (item?.ProviderIds == null) return false;
+            if (!item.ProviderIds.TryGetValue(key, out var v)) return false;
+            value = v;
+            return true;
+        }
+
+        private static void SetProviderId(BaseItem item, string key, string value)
+        {
+            item.ProviderIds[key] = value;
+        }
     }
 }
