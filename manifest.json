@@ -6,6 +6,15 @@
     "owner": "Solas79",
     "overview": "Assigns TMDb boxset metadata to existing Jellyfin collections based on their movies.",
     "description": "Copies TMDb collection IDs from movies into BoxSets, enabling Jellyfin to download boxset metadata and images.",
-    "versions": []
+    "versions": [
+      {
+        "version": "0.0.7.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/Solas79/TmdbBoxsetMetadataForCollections/releases/download/v0.0.7/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip",
+        "checksum": "cc05c5492ab94745b8d4bd9d5cdc6b91",
+        "timestamp": "2026-01-16T15:01:52Z",
+        "changelog": "Automatischer Build für v0.0.7 (Jellyfin 10.11.x)"
+      }
+    ]
   }
 ]
