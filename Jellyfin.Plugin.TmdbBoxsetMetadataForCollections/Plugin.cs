@@ -5,7 +5,7 @@ using MediaBrowser.Model.Serialization;
 
 namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
 {
-    public sealed class Plugin : BasePlugin<Configuration.PluginConfiguration>
+    public sealed class Plugin : BasePlugin
     {
         public Plugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer)
             : base(applicationPaths, xmlSerializer)
@@ -17,6 +17,6 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
         public override Guid Id => Guid.Parse("b11c1cde-4c6e-4c55-b4a5-5a4b95f7c801");
 
         public override string Description =>
-            "Assigns TMDb collection (boxset) IDs to Jellyfin BoxSets based on the contained movies, enabling boxset metadata/images.";
+            "Copies TMDb Collection IDs from movies into BoxSets (Collections) so Jellyfin can download boxset metadata/images.";
     }
 }
