@@ -4,16 +4,16 @@
     "guid": "b11c1cde-4c6e-4c55-b4a5-5a4b95f7c801",
     "name": "TMDb Boxset Metadata for Collections",
     "owner": "Solas79",
-    "overview": "Assigns TMDb boxset metadata to existing Jellyfin collections based on their movies.",
-    "description": "Copies TMDb collection IDs from movies into BoxSets, enabling Jellyfin to download boxset metadata and images.",
+    "overview": "Copies TMDbCollection IDs from movies into BoxSets.",
+    "description": "Sets TMDbCollection on BoxSets and triggers metadata/image refresh via scheduled task.",
     "versions": [
       {
-        "version": "0.0.7.0",
+        "version": "0.1.0.0",
         "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/Solas79/TmdbBoxsetMetadataForCollections/releases/download/v0.0.7/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip",
-        "checksum": "cc05c5492ab94745b8d4bd9d5cdc6b91",
-        "timestamp": "2026-01-16T15:01:52Z",
-        "changelog": "Automatischer Build für v0.0.7 (Jellyfin 10.11.x)"
+        "sourceUrl": "https://github.com/Solas79/TmdbBoxsetMetadataForCollections/releases/download/v0.1.0/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip",
+        "checksum": "0ccf7e4a3e5de40d54b023b6c05812e8",
+        "timestamp": "2026-01-17T09:55:53Z",
+        "changelog": "Automatischer Build für v0.1.0 (Jellyfin 10.11.x)"
       }
     ]
   }
