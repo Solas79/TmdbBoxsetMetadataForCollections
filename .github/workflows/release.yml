@@ -26,29 +26,33 @@ jobs:
         with:
           dotnet-version: "9.0.x"
 
-      - name: Authenticate Jellyfin NuGet source (NuGet.config)
+      - name: Derive version from tag
         shell: bash
         run: |
-          dotnet nuget update source jellyfin \
+          TAG="${GITHUB_REF_NAME}"     # z.B. v0.1.0
+          VER="${TAG#v}.0"             # -> 0.1.0.0
+          echo "PLUGIN_VERSION=$VER" >> $GITHUB_ENV
+          echo "Using version: $VER"
+
+      - name: Configure Jellyfin NuGet source (NuGet.config)
+        shell: bash
+        run: |
+          dotnet nuget remove source jellyfin --configfile NuGet.config >/dev/null 2>&1 || true
+          dotnet nuget add source "https://nuget.pkg.github.com/jellyfin/index.json" \
+            --name jellyfin \
             --username "github-actions" \
             --password "${{ secrets.GITHUB_TOKEN }}" \
             --store-password-in-clear-text \
             --configfile NuGet.config
 
-
-
-      - name: Derive version from tag
+      - name: Show NuGet sources (debug)
         shell: bash
-        run: |
-          TAG="${GITHUB_REF_NAME}"     # z.B. v0.0.7
-          VER="${TAG#v}.0"             # -> 0.0.7.0
-          echo "PLUGIN_VERSION=$VER" >> $GITHUB_ENV
-          echo "Using version: $VER"
+        run: dotnet nuget list source --configfile NuGet.config
 
       - name: Restore
         run: dotnet restore Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj --configfile NuGet.config
 
-      - name: Build
+      - name: Build (DLL only)
         run: dotnet build Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj -c Release --no-restore --configfile NuGet.config /p:Version=${{ env.PLUGIN_VERSION }} /p:AssemblyVersion=${{ env.PLUGIN_VERSION }} /p:FileVersion=${{ env.PLUGIN_VERSION }}
 
       - name: Package plugin zip (folder + dll)
@@ -92,7 +96,7 @@ jobs:
               "name": "TMDb Boxset Metadata for Collections",
               "owner": "Solas79",
               "overview": "Copies TMDbCollection IDs from movies into BoxSets.",
-              "description": "Sets TMDbCollection on BoxSets and optionally triggers metadata/image refresh.",
+              "description": "Sets TMDbCollection on BoxSets and triggers metadata/image refresh via scheduled task.",
               "versions": [
                 {
                   "version": "${NEW_VERSION}",
