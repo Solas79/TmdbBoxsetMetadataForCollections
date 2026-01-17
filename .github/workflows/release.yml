@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -13,30 +14,51 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
 
-      - name: Setup .NET
+      - name: Setup .NET 9
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: "9.0.x"
+
+      - name: Derive version from tag
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"   # z.B. v0.1.2
+          VER="${TAG#v}.0"           # -> 0.1.2.0
+          echo "PLUGIN_VERSION=$VER" >> $GITHUB_ENV
+          echo "Using version: $VER"
 
       - name: Restore
-        run: dotnet restore --configfile NuGet.config
+        run: dotnet restore Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj --configfile NuGet.config
 
       - name: Build
-        run: |
-          dotnet build Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj \
-            -c Release \
-            /p:Version=${GITHUB_REF_NAME#v}
+        run: dotnet build Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj -c Release --no-restore --configfile NuGet.config /p:Version=${{ env.PLUGIN_VERSION }} /p:AssemblyVersion=${{ env.PLUGIN_VERSION }} /p:FileVersion=${{ env.PLUGIN_VERSION }}
 
-      - name: Package
+      - name: Package ZIP (DLLs)
+        shell: bash
         run: |
-          mkdir release
-          cp Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/bin/Release/net9.0/*.dll release/
-          cd release
-          zip -r ../TmdbBoxsetMetadataForCollections.zip .
+          set -e
+          OUTDIR=out
+          ZIP=TmdbBoxsetMetadataForCollections.zip
 
-      - name: Release
+          rm -rf "$OUTDIR"
+          mkdir -p "$OUTDIR"
+
+          cp Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/bin/Release/net9.0/*.dll "$OUTDIR/"
+
+          (cd "$OUTDIR" && zip -9r "../$ZIP" .)
+          ls -l
+
+      - name: Create / Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          name: TMDb Boxset Metadata for Collections ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
           files: TmdbBoxsetMetadataForCollections.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
