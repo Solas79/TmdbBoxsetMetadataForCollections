@@ -61,7 +61,6 @@ public sealed class BoxSetScanManager
                 var currentId = GetProviderId(boxSet, ProviderKeyTmdbCollection);
                 if (!string.IsNullOrWhiteSpace(currentId))
                 {
-                    // already has id
                     continue;
                 }
 
@@ -88,13 +87,14 @@ public sealed class BoxSetScanManager
 
                 SetProviderId(boxSet, ProviderKeyTmdbCollection, derived);
 
-                _logger.LogInformation("[TBMFC] Set {Key}={Value} on collection '{Name}' ({Id}).",
+                _logger.LogInformation(
+                    "[TBMFC] Set {Key}={Value} on collection '{Name}' ({Id}).",
                     ProviderKeyTmdbCollection,
                     derived,
                     boxSet.Name,
                     boxSet.Id);
 
-                // Refresh metadata so artwork/metadata can be pulled
+                // Trigger metadata refresh so artwork/metadata can be pulled
                 await boxSet.RefreshMetadata(cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -109,14 +109,14 @@ public sealed class BoxSetScanManager
         _logger.LogInformation("[TBMFC] Scan finished.");
     }
 
-    private static string? GetProviderId(BaseItem item, string key)
+    private static string GetProviderId(BaseItem item, string key)
     {
         if (item.ProviderIds is null)
         {
-            return null;
+            return string.Empty;
         }
 
-        return item.ProviderIds.TryGetValue(key, out var value) ? value : null;
+        return item.ProviderIds.TryGetValue(key, out var value) ? value : string.Empty;
     }
 
     private static void SetProviderId(BaseItem item, string key, string value)
