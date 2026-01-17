@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: write
-  packages: read
 
 jobs:
   build:
@@ -34,20 +33,8 @@ jobs:
           echo "PLUGIN_VERSION=$VER" >> $GITHUB_ENV
           echo "Using version: $VER"
 
-      - name: Configure Jellyfin NuGet source (NuGet.config)
-        shell: bash
-        run: |
-          dotnet nuget remove source jellyfin --configfile NuGet.config >/dev/null 2>&1 || true
-          dotnet nuget add source "https://nuget.pkg.github.com/jellyfin/index.json" \
-            --name jellyfin \
-            --username "github-actions" \
-            --password "${{ secrets.GITHUB_TOKEN }}" \
-            --store-password-in-clear-text \
-            --configfile NuGet.config
-
-      - name: Show NuGet sources (debug)
-        shell: bash
-        run: dotnet nuget list source --configfile NuGet.config
+      - name: Clear NuGet caches (optional)
+        run: dotnet nuget locals all --clear
 
       - name: Restore
         run: dotnet restore Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj --configfile NuGet.config
