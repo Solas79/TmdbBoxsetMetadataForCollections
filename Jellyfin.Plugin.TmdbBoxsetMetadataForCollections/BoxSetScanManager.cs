@@ -4,8 +4,10 @@ using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Controller.IO;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Providers;
+using MediaBrowser.Model.IO;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
@@ -14,15 +16,18 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
     {
         private readonly ILibraryManager _libraryManager;
         private readonly IProviderManager _providerManager;
+        private readonly IFileSystem _fileSystem;
         private readonly ILogger<BoxSetScanManager> _logger;
 
         public BoxSetScanManager(
             ILibraryManager libraryManager,
             IProviderManager providerManager,
+            IFileSystem fileSystem,
             ILogger<BoxSetScanManager> logger)
         {
             _libraryManager = libraryManager;
             _providerManager = providerManager;
+            _fileSystem = fileSystem;
             _logger = logger;
         }
 
@@ -47,11 +52,9 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
                 done++;
                 progress?.Report(total == 0 ? 100 : done * 100.0 / total);
 
-                // hat BoxSet schon TmdbCollection?
                 if (HasProviderId(bs, ProviderKeys.TmdbCollection))
                     continue;
 
-                // Movies innerhalb BoxSet
                 var movies = _libraryManager.GetItemList(new InternalItemsQuery
                 {
                     ParentId = bs.Id,
@@ -74,8 +77,10 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
 
                 if (triggerRefresh)
                 {
-                    // Minimaler Refresh: Jellyfin soll Metadaten/Bilder neu ziehen
-                    var options = new MetadataRefreshOptions
+                    // Jellyfin 10.11: MetadataRefreshOptions benötigt IDirectoryService
+                    var directoryService = new DirectoryService(_fileSystem);
+
+                    var options = new MetadataRefreshOptions(directoryService)
                     {
                         ForceSave = true,
                         ReplaceAllMetadata = true,
