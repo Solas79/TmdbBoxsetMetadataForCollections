@@ -1,7 +1,3 @@
-// <copyright file="Plugin.cs" company="Solas79">
-// Copyright (c) Solas79. All rights reserved.
-// </copyright>
-
 namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
 {
     using System;
@@ -10,20 +6,22 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
     /// <summary>
     /// Plugin entry point.
     /// </summary>
-    public sealed class TmdbBoxsetMetadataForCollectionsPlugin : BasePlugin
+    public sealed class Plugin : BasePlugin
     {
-        /// <summary>
-        /// Gets the current plugin instance.
-        /// </summary>
-        public static TmdbBoxsetMetadataForCollectionsPlugin Instance { get; private set; }
+        private static Plugin instance;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="TmdbBoxsetMetadataForCollectionsPlugin"/> class.
+        /// Initializes a new instance of the <see cref="Plugin"/> class.
         /// </summary>
-        public TmdbBoxsetMetadataForCollectionsPlugin()
+        public Plugin()
         {
-            Instance = this;
+            instance = this;
         }
+
+        /// <summary>
+        /// Gets the plugin instance.
+        /// </summary>
+        public static Plugin Instance => instance;
 
         /// <inheritdoc />
         public override string Name => "TMDb Boxset Metadata for Collections";
