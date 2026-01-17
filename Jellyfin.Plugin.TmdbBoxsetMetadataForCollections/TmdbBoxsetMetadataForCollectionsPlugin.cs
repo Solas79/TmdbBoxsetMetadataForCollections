@@ -1,4 +1,4 @@
-// <copyright file="Plugin.cs" company="Jellyfin">
+// <copyright file="TmdbBoxsetMetadataForCollectionsPlugin.cs" company="Jellyfin">
 // Copyright (c) Jellyfin.
 // Licensed under the GNU General Public License v2.0.
 // </copyright>
