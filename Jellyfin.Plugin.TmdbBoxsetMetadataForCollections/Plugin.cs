@@ -11,12 +11,12 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
     /// <summary>
     /// Plugin entry point.
     /// </summary>
-    public sealed class Plugin : BasePlugin
+    public sealed class TmdbBoxsetMetadataForCollectionsPlugin : BasePlugin
     {
         /// <summary>
-        /// Initializes a new instance of the <see cref="Plugin"/> class.
+        /// Initializes a new instance of the <see cref="TmdbBoxsetMetadataForCollectionsPlugin"/> class.
         /// </summary>
-        public Plugin()
+        public TmdbBoxsetMetadataForCollectionsPlugin()
         {
         }
 
@@ -28,6 +28,6 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
 
         /// <inheritdoc />
         public override string Description =>
-            "Assigns TMDb boxset metadata to existing Jellyfin collections based on their movies. Manual task only.";
+            "Copies ProviderIds['TmdbCollection'] from movies into their collections and refreshes metadata (manual task).";
     }
 }
