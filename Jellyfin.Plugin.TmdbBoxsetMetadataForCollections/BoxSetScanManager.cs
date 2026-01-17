@@ -23,6 +23,24 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
     {
         private const string ProviderKeyTmdbCollection = "TmdbCollection";
 
+        private static readonly Action<ILogger, int, Exception> LogFoundCollections =
+            LoggerMessage.Define<int>(
+                LogLevel.Information,
+                new EventId(1, nameof(LogFoundCollections)),
+                "[TBMFC] Found {Count} collections (BoxSet).");
+
+        private static readonly Action<ILogger, string, string, string, Guid, Exception> LogSetId =
+            LoggerMessage.Define<string, string, string, Guid>(
+                LogLevel.Information,
+                new EventId(2, nameof(LogSetId)),
+                "[TBMFC] Set {Key}={Value} on collection '{Name}' ({Id}).");
+
+        private static readonly Action<ILogger, int, Exception> LogFinished =
+            LoggerMessage.Define<int>(
+                LogLevel.Information,
+                new EventId(3, nameof(LogFinished)),
+                "[TBMFC] Scan finished. Updated {Changed} collections.");
+
         private readonly ILibraryManager libraryManager;
         private readonly ILogger<BoxSetScanManager> logger;
 
@@ -45,10 +63,7 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
         /// <returns>Task.</returns>
         public async Task RunAsync(IProgress<double> progress, CancellationToken cancellationToken)
         {
-            if (progress is null)
-            {
-                throw new ArgumentNullException(nameof(progress));
-            }
+            ArgumentNullException.ThrowIfNull(progress);
 
             progress.Report(0);
 
@@ -58,7 +73,7 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
                 Recursive = true,
             }).OfType<BoxSet>().ToList();
 
-            this.logger.LogInformation("[TBMFC] Found {Count} collections (BoxSet).", boxSets.Count);
+            LogFoundCollections(this.logger, boxSets.Count, null);
 
             var processed = 0;
             var changed = 0;
@@ -68,7 +83,6 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
                 cancellationToken.ThrowIfCancellationRequested();
                 processed++;
 
-                // skip if already has TMDbCollection
                 var currentId = GetProviderId(boxSet, ProviderKeyTmdbCollection);
                 if (!string.IsNullOrWhiteSpace(currentId))
                 {
@@ -76,7 +90,6 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
                     continue;
                 }
 
-                // load movies inside this collection
                 var movies = this.libraryManager.GetItemList(new InternalItemsQuery
                 {
                     ParentId = boxSet.Id,
@@ -90,7 +103,6 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
                     continue;
                 }
 
-                // first movie with TMDbCollection
                 var derived = movies
                     .Select(m => GetProviderId(m, ProviderKeyTmdbCollection))
                     .FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
@@ -101,25 +113,19 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
                     continue;
                 }
 
-                // write to collection
                 SetProviderId(boxSet, ProviderKeyTmdbCollection, derived);
                 changed++;
 
-                this.logger.LogInformation(
-                    "[TBMFC] Set {Key}={Value} on collection '{Name}' ({Id}).",
-                    ProviderKeyTmdbCollection,
-                    derived,
-                    boxSet.Name,
-                    boxSet.Id);
+                LogSetId(this.logger, ProviderKeyTmdbCollection, derived, boxSet.Name, boxSet.Id, null);
 
-                // refresh metadata so artwork can be fetched
+                // Refresh metadata so artwork/metadata can be pulled.
                 await boxSet.RefreshMetadata(cancellationToken).ConfigureAwait(false);
 
                 progress.Report(processed * 100d / Math.Max(1, boxSets.Count));
             }
 
             progress.Report(100);
-            this.logger.LogInformation("[TBMFC] Scan finished. Updated {Changed} collections.", changed);
+            LogFinished(this.logger, changed, null);
         }
 
         private static string GetProviderId(BaseItem item, string key)
