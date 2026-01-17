@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Providers;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
@@ -14,11 +16,16 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
         private const string ProviderKeyTmdbCollection = "TmdbCollection";
 
         private readonly ILibraryManager libraryManager;
+        private readonly IProviderManager providerManager;
         private readonly ILogger<BoxSetScanManager> logger;
 
-        public BoxSetScanManager(ILibraryManager libraryManager, ILogger<BoxSetScanManager> logger)
+        public BoxSetScanManager(
+            ILibraryManager libraryManager,
+            IProviderManager providerManager,
+            ILogger<BoxSetScanManager> logger)
         {
             this.libraryManager = libraryManager;
+            this.providerManager = providerManager;
             this.logger = logger;
         }
 
@@ -31,89 +38,123 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
 
             progress.Report(0);
 
-            // 1) Alle BoxSets/Collections holen
+            // NOTE: In 10.11.x we can query by string item types reliably.
             var boxSets = this.libraryManager.GetItemList(new InternalItemsQuery
             {
-                IncludeItemTypes = new[] { BaseItemKind.BoxSet },
+                IncludeItemTypes = new[] { "BoxSet" },
                 Recursive = true
             }).OfType<BoxSet>().ToArray();
 
-            this.logger.LogInformation("Found {Count} collections (BoxSets).", boxSets.Length);
+            this.logger.LogInformation("[TBMFC] Found {Count} collections (BoxSet).", boxSets.Length);
 
             var processed = 0;
+            var updated = 0;
 
             foreach (var boxSet in boxSets)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
+                processed++;
+                progress.Report(processed / (double)Math.Max(1, boxSets.Length));
+
                 try
                 {
-                    processed++;
-                    progress.Report(processed / (double)Math.Max(1, boxSets.Length));
-
-                    // Hat die Collection schon eine TMDbCollection?
-                    string existing;
-                    if (boxSet.ProviderIds != null
-                        && boxSet.ProviderIds.TryGetValue(ProviderKeyTmdbCollection, out existing)
-                        && !string.IsNullOrWhiteSpace(existing))
+                    // If already set, skip.
+                    if (TryGetProviderId(boxSet, ProviderKeyTmdbCollection, out var existing) &&
+                        !string.IsNullOrWhiteSpace(existing))
                     {
                         continue;
                     }
 
-                    // 2) Filme in der Collection holen
-                    var children = this.libraryManager.GetItemList(new InternalItemsQuery
+                    // Load movies in this collection.
+                    var movies = this.libraryManager.GetItemList(new InternalItemsQuery
                     {
                         ParentId = boxSet.Id,
-                        IncludeItemTypes = new[] { BaseItemKind.Movie },
+                        IncludeItemTypes = new[] { "Movie" },
                         Recursive = true
                     }).OfType<Movie>().ToArray();
 
-                    if (children.Length == 0)
+                    if (movies.Length == 0)
                     {
                         continue;
                     }
 
-                    // 3) Erste gültige TmdbCollection aus Filmen nehmen
-                    var tmdbCollectionId = children
-                        .Select(m =>
+                    // Derive first TMDbCollection id from movies.
+                    string tmdbCollectionId = null;
+                    foreach (var m in movies)
+                    {
+                        if (TryGetProviderId(m, ProviderKeyTmdbCollection, out var v) &&
+                            !string.IsNullOrWhiteSpace(v))
                         {
-                            string v;
-                            return (m.ProviderIds != null && m.ProviderIds.TryGetValue(ProviderKeyTmdbCollection, out v)) ? v : null;
-                        })
-                        .FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
+                            tmdbCollectionId = v;
+                            break;
+                        }
+                    }
 
                     if (string.IsNullOrWhiteSpace(tmdbCollectionId))
                     {
-                        // Kein Film hat eine TmdbCollection
                         continue;
                     }
 
-                    this.logger.LogInformation("Set {Key}={Val} on collection '{Name}' ({Id}).",
-                        ProviderKeyTmdbCollection, tmdbCollectionId, boxSet.Name, boxSet.Id);
-
-                    // 4) Setzen + speichern
-                    if (boxSet.ProviderIds == null)
-                    {
-                        boxSet.ProviderIds = new ProviderIdDictionary(StringComparer.OrdinalIgnoreCase);
-                    }
-
+                    EnsureProviderIds(boxSet);
                     boxSet.ProviderIds[ProviderKeyTmdbCollection] = tmdbCollectionId;
 
-                    // 5) Persistieren
-                    this.libraryManager.UpdateItem(boxSet, boxSet.GetParent(), ItemUpdateType.MetadataEdit);
+                    this.logger.LogInformation(
+                        "[TBMFC] Set {Key}={Val} on collection '{Name}' ({Id}).",
+                        ProviderKeyTmdbCollection, tmdbCollectionId, boxSet.Name, boxSet.Id);
 
-                    // 6) Optional: Refresh Metadata (damit Bilder gezogen werden)
-                    await boxSet.RefreshMetadata(new MetadataRefreshOptions(cancellationToken, MetadataRefreshMode.FullRefresh), cancellationToken)
+                    // Refresh metadata to trigger image fetch + write provider ids.
+                    // This is the most compatible route across 10.11 builds.
+                    await this.providerManager.RefreshMetadata(
+                            boxSet,
+                            new MetadataRefreshOptions
+                            {
+                                ForceSave = true,
+                                ForceRefresh = true
+                            },
+                            cancellationToken)
                         .ConfigureAwait(false);
+
+                    updated++;
                 }
                 catch (Exception ex)
                 {
-                    this.logger.LogError(ex, "Error processing collection {Name} ({Id}).", boxSet.Name, boxSet.Id);
+                    this.logger.LogError(ex, "[TBMFC] Error processing collection '{Name}' ({Id}).", boxSet.Name, boxSet.Id);
                 }
             }
 
             progress.Report(1);
-            this.logger.LogInformation("Scan finished.");
+            this.logger.LogInformation("[TBMFC] Scan finished. Updated {Updated} collections.", updated);
         }
+
+        private static void EnsureProviderIds(BaseItem item)
+        {
+            if (item.ProviderIds == null)
+            {
+                item.ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            }
+        }
+
+        private static bool TryGetProviderId(BaseItem item, string key, out string value)
+        {
+            value = null;
+
+            if (item.ProviderIds == null)
+            {
+                return false;
+            }
+
+            return item.ProviderIds.TryGetValue(key, out value);
+        }
+    }
+
+    // Minimal options object used by IProviderManager.RefreshMetadata in 10.11.
+    // If your Jellyfin.Controller already contains MediaBrowser.Controller.Providers.MetadataRefreshOptions,
+    // this local type must be REMOVED. Only keep it if build complains it can't find MetadataRefreshOptions.
+    public sealed class MetadataRefreshOptions
+    {
+        public bool ForceRefresh { get; set; }
+
+        public bool ForceSave { get; set; }
     }
 }
