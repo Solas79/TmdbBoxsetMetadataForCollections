@@ -1,4 +1,3 @@
-using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -7,7 +6,6 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Providers;
-using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
@@ -49,9 +47,11 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
                 done++;
                 progress?.Report(total == 0 ? 100 : done * 100.0 / total);
 
+                // hat BoxSet schon TmdbCollection?
                 if (HasProviderId(bs, ProviderKeys.TmdbCollection))
                     continue;
 
+                // Movies innerhalb BoxSet
                 var movies = _libraryManager.GetItemList(new InternalItemsQuery
                 {
                     ParentId = bs.Id,
@@ -69,12 +69,13 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
                 SetProviderId(bs, ProviderKeys.TmdbCollection, tmdbColId);
                 changed++;
 
-                _logger.LogInformation("[TBMFC] Set {Key}={Id} on BoxSet '{Name}'", ProviderKeys.TmdbCollection, tmdbColId, bs.Name);
+                _logger.LogInformation("[TBMFC] Set {Key}={Id} on BoxSet '{Name}'",
+                    ProviderKeys.TmdbCollection, tmdbColId, bs.Name);
 
                 if (triggerRefresh)
                 {
-                    // Metadaten/Bilder anstoßen
-                    var options = new MetadataRefreshOptions(new DirectoryService(_libraryManager))
+                    // Minimaler Refresh: Jellyfin soll Metadaten/Bilder neu ziehen
+                    var options = new MetadataRefreshOptions
                     {
                         ForceSave = true,
                         ReplaceAllMetadata = true,
@@ -91,7 +92,9 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
         }
 
         private static bool HasProviderId(BaseItem item, string key)
-            => item.ProviderIds != null && item.ProviderIds.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v);
+            => item.ProviderIds != null
+               && item.ProviderIds.TryGetValue(key, out var v)
+               && !string.IsNullOrWhiteSpace(v);
 
         private static string? GetProviderId(BaseItem item, string key)
         {
