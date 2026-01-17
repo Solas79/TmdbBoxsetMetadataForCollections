@@ -18,6 +18,8 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.ScheduledTasks
     public sealed class ScanLibraryTask : IScheduledTask
     {
         private readonly IServiceProvider serviceProvider;
+        private readonly bool isHidden;
+        private readonly bool isEnabled;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ScanLibraryTask"/> class.
@@ -26,6 +28,8 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.ScheduledTasks
         public ScanLibraryTask(IServiceProvider serviceProvider)
         {
             this.serviceProvider = serviceProvider;
+            this.isHidden = false;
+            this.isEnabled = true;
         }
 
         /// <summary>
@@ -52,12 +56,12 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.ScheduledTasks
         /// <summary>
         /// Gets a value indicating whether the task is hidden.
         /// </summary>
-        public bool IsHidden => false;
+        public bool IsHidden => this.isHidden;
 
         /// <summary>
         /// Gets a value indicating whether the task is enabled.
         /// </summary>
-        public bool IsEnabled => true;
+        public bool IsEnabled => this.isEnabled;
 
         /// <inheritdoc />
         public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
