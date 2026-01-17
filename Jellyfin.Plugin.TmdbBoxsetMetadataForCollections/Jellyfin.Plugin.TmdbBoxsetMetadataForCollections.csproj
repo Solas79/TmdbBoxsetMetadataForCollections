@@ -6,13 +6,13 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Nullable>disable</Nullable>
     <AnalysisMode>AllEnabledByDefault</AnalysisMode>
+    <NoWarn>$(NoWarn);CA1724</NoWarn>
 
     <!-- Nur aktivieren, wenn die Datei wirklich existiert -->
     <!-- <CodeAnalysisRuleSet>../jellyfin.ruleset</CodeAnalysisRuleSet> -->
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- wie im Beispiel: nur Controller, wildcard -->
     <PackageReference Include="Jellyfin.Controller" Version="10.*-*" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
