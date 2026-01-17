@@ -1,3 +1,5 @@
+# do not install, betatest
+
 # TMDb Boxset Metadata for Collections
 
 For Jellyfin 10.11.x.
