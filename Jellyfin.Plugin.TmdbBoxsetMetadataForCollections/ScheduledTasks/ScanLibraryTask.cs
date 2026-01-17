@@ -10,18 +10,30 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.ScheduledTasks
     using System.Threading;
     using System.Threading.Tasks;
     using MediaBrowser.Model.Tasks;
+    using Microsoft.Extensions.DependencyInjection;
 
     /// <summary>
     /// Manual scheduled task to run the scan.
     /// </summary>
     public sealed class ScanLibraryTask : IScheduledTask
     {
+        private readonly IServiceProvider serviceProvider;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ScanLibraryTask"/> class.
+        /// </summary>
+        /// <param name="serviceProvider">Service provider.</param>
+        public ScanLibraryTask(IServiceProvider serviceProvider)
+        {
+            this.serviceProvider = serviceProvider;
+        }
+
         /// <inheritdoc />
         public string Name => "TMDb Boxset Metadata for Collections";
 
         /// <inheritdoc />
         public string Description =>
-            "Manual scan: assign TMDb boxset/collection ids to collections based on contained movies.";
+            "Manual scan: copies ProviderIds['TmdbCollection'] from movies into their collections and refreshes metadata.";
 
         /// <inheritdoc />
         public string Category => "Library";
@@ -43,14 +55,10 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.ScheduledTasks
         }
 
         /// <inheritdoc />
-        public Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
+        public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
         {
-            progress.Report(0);
-
-            // Scan logic comes next.
-
-            progress.Report(100);
-            return Task.CompletedTask;
+            var mgr = this.serviceProvider.GetRequiredService<BoxSetScanManager>();
+            await mgr.RunAsync(progress, cancellationToken).ConfigureAwait(false);
         }
     }
 }
