@@ -1,6 +1,6 @@
 using System.Threading;
 using System.Threading.Tasks;
-using MediaBrowser.Controller.Plugins;
+using MediaBrowser.Controller.Plugins;  // <- wichtig
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
@@ -18,7 +18,6 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
 
         public Task RunAsync()
         {
-            // Fire-and-forget beim Start: kein aggressiver Refresh, nur IDs setzen.
             _ = Task.Run(async () =>
             {
                 try
