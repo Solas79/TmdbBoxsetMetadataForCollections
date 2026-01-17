@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Model.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.ScheduledTasks;
 
@@ -16,14 +17,14 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.ScheduledTasks;
 /// </summary>
 public sealed class ScanLibraryTask : IScheduledTask
 {
-    private readonly BoxSetScanManager _scanManager;
+    private readonly IServiceProvider _serviceProvider;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ScanLibraryTask"/> class.
     /// </summary>
-    public ScanLibraryTask(BoxSetScanManager scanManager)
+    public ScanLibraryTask(IServiceProvider serviceProvider)
     {
-        _scanManager = scanManager;
+        _serviceProvider = serviceProvider;
     }
 
     /// <inheritdoc />
@@ -55,6 +56,7 @@ public sealed class ScanLibraryTask : IScheduledTask
     /// <inheritdoc />
     public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
     {
-        await _scanManager.RunAsync(progress, cancellationToken).ConfigureAwait(false);
+        var mgr = _serviceProvider.GetRequiredService<BoxSetScanManager>();
+        await mgr.RunAsync(progress, cancellationToken).ConfigureAwait(false);
     }
 }
