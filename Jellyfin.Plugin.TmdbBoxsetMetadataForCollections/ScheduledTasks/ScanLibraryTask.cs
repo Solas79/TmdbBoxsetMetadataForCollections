@@ -28,23 +28,35 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.ScheduledTasks
             this.serviceProvider = serviceProvider;
         }
 
-        /// <inheritdoc />
+        /// <summary>
+        /// Gets the task name.
+        /// </summary>
         public string Name => "TMDb Boxset Metadata for Collections";
 
-        /// <inheritdoc />
+        /// <summary>
+        /// Gets the task description.
+        /// </summary>
         public string Description =>
             "Manual scan: copies ProviderIds['TmdbCollection'] from movies into their collections and refreshes metadata.";
 
-        /// <inheritdoc />
+        /// <summary>
+        /// Gets the task category.
+        /// </summary>
         public string Category => "Library";
 
-        /// <inheritdoc />
+        /// <summary>
+        /// Gets the task key.
+        /// </summary>
         public string Key => "tmdb_boxset_metadata_for_collections_scan";
 
-        /// <inheritdoc />
+        /// <summary>
+        /// Gets a value indicating whether the task is hidden.
+        /// </summary>
         public bool IsHidden => false;
 
-        /// <inheritdoc />
+        /// <summary>
+        /// Gets a value indicating whether the task is enabled.
+        /// </summary>
         public bool IsEnabled => true;
 
         /// <inheritdoc />
