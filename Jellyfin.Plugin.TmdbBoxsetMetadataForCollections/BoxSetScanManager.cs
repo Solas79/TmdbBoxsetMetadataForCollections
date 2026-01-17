@@ -17,7 +17,7 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
     using Microsoft.Extensions.Logging;
 
     /// <summary>
-    /// Scans existing collections and assigns TMDb collection ids based on contained movies.
+    /// Scans collections (BoxSet) and assigns TMDbCollection provider id based on contained movies.
     /// </summary>
     public sealed class BoxSetScanManager
     {
@@ -45,6 +45,11 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
         /// <returns>Task.</returns>
         public async Task RunAsync(IProgress<double> progress, CancellationToken cancellationToken)
         {
+            if (progress is null)
+            {
+                throw new ArgumentNullException(nameof(progress));
+            }
+
             progress.Report(0);
 
             var boxSets = this.libraryManager.GetItemList(new InternalItemsQuery
@@ -56,62 +61,65 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
             this.logger.LogInformation("[TBMFC] Found {Count} collections (BoxSet).", boxSets.Count);
 
             var processed = 0;
+            var changed = 0;
+
             foreach (var boxSet in boxSets)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 processed++;
 
-                try
+                // skip if already has TMDbCollection
+                var currentId = GetProviderId(boxSet, ProviderKeyTmdbCollection);
+                if (!string.IsNullOrWhiteSpace(currentId))
                 {
-                    var currentId = GetProviderId(boxSet, ProviderKeyTmdbCollection);
-                    if (!string.IsNullOrWhiteSpace(currentId))
-                    {
-                        continue;
-                    }
-
-                    var movies = this.libraryManager.GetItemList(new InternalItemsQuery
-                    {
-                        ParentId = boxSet.Id,
-                        IncludeItemTypes = new[] { BaseItemKind.Movie },
-                        Recursive = true,
-                    }).OfType<Movie>().ToList();
-
-                    if (movies.Count == 0)
-                    {
-                        continue;
-                    }
-
-                    var derived = movies
-                        .Select(m => GetProviderId(m, ProviderKeyTmdbCollection))
-                        .FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
-
-                    if (string.IsNullOrWhiteSpace(derived))
-                    {
-                        continue;
-                    }
-
-                    SetProviderId(boxSet, ProviderKeyTmdbCollection, derived);
-
-                    this.logger.LogInformation(
-                        "[TBMFC] Set {Key}={Value} on collection '{Name}' ({Id}).",
-                        ProviderKeyTmdbCollection,
-                        derived,
-                        boxSet.Name,
-                        boxSet.Id);
-
-                    // Trigger metadata refresh so artwork/metadata can be pulled
-                    await boxSet.RefreshMetadata(cancellationToken).ConfigureAwait(false);
+                    progress.Report(processed * 100d / Math.Max(1, boxSets.Count));
+                    continue;
                 }
-                catch (Exception ex)
+
+                // load movies inside this collection
+                var movies = this.libraryManager.GetItemList(new InternalItemsQuery
                 {
-                    this.logger.LogError(ex, "[TBMFC] Error processing collection '{Name}' ({Id}).", boxSet.Name, boxSet.Id);
+                    ParentId = boxSet.Id,
+                    IncludeItemTypes = new[] { BaseItemKind.Movie },
+                    Recursive = true,
+                }).OfType<Movie>().ToList();
+
+                if (movies.Count == 0)
+                {
+                    progress.Report(processed * 100d / Math.Max(1, boxSets.Count));
+                    continue;
                 }
+
+                // first movie with TMDbCollection
+                var derived = movies
+                    .Select(m => GetProviderId(m, ProviderKeyTmdbCollection))
+                    .FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
+
+                if (string.IsNullOrWhiteSpace(derived))
+                {
+                    progress.Report(processed * 100d / Math.Max(1, boxSets.Count));
+                    continue;
+                }
+
+                // write to collection
+                SetProviderId(boxSet, ProviderKeyTmdbCollection, derived);
+                changed++;
+
+                this.logger.LogInformation(
+                    "[TBMFC] Set {Key}={Value} on collection '{Name}' ({Id}).",
+                    ProviderKeyTmdbCollection,
+                    derived,
+                    boxSet.Name,
+                    boxSet.Id);
+
+                // refresh metadata so artwork can be fetched
+                await boxSet.RefreshMetadata(cancellationToken).ConfigureAwait(false);
 
                 progress.Report(processed * 100d / Math.Max(1, boxSets.Count));
             }
 
             progress.Report(100);
-            this.logger.LogInformation("[TBMFC] Scan finished.");
+            this.logger.LogInformation("[TBMFC] Scan finished. Updated {Changed} collections.", changed);
         }
 
         private static string GetProviderId(BaseItem item, string key)
@@ -126,7 +134,6 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections
 
         private static void SetProviderId(BaseItem item, string key, string value)
         {
-            // In 10.11.x ist ProviderIds Dictionary-kompatibel; falls null setzen wir ein normales Dictionary.
             if (item.ProviderIds is null)
             {
                 item.ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
