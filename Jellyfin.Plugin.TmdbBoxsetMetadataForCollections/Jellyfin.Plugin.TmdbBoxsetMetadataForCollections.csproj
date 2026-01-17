@@ -6,7 +6,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Nullable>disable</Nullable>
     <AnalysisMode>AllEnabledByDefault</AnalysisMode>
-    <NoWarn>$(NoWarn);CA1724</NoWarn>
+    <NoWarn>$(NoWarn);CA1724;SA1633;SA1636</NoWarn>
 
     <!-- Nur aktivieren, wenn die Datei wirklich existiert -->
     <!-- <CodeAnalysisRuleSet>../jellyfin.ruleset</CodeAnalysisRuleSet> -->
