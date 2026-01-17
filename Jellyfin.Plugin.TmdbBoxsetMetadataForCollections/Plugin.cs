@@ -20,6 +20,4 @@ public sealed class Plugin : BasePlugin
 
     public override string Description =>
         "Assigns TMDb boxset metadata to existing Jellyfin collections based on their movies.";
-
-    public override bool CanUninstall => true;
 }
