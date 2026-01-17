@@ -7,17 +7,9 @@
     <Nullable>disable</Nullable>
     <AnalysisMode>AllEnabledByDefault</AnalysisMode>
 
-    <!-- optional: nur falls du die Datei wirklich hast -->
+    <!-- Nur aktivieren, wenn die Datei wirklich existiert -->
     <!-- <CodeAnalysisRuleSet>../jellyfin.ruleset</CodeAnalysisRuleSet> -->
   </PropertyGroup>
-
-  <!-- optional: falls du später eine Config-Page willst -->
-  <!--
-  <ItemGroup>
-    <None Remove="Configuration\configurationpage.html" />
-    <EmbeddedResource Include="Configuration\configurationpage.html" />
-  </ItemGroup>
-  -->
 
   <ItemGroup>
     <!-- wie im Beispiel: nur Controller, wildcard -->
