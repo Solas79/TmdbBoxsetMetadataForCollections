@@ -1,19 +1,16 @@
 using System;
-using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
-using MediaBrowser.Model.Serialization;
 
 namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections;
 
 public sealed class Plugin : BasePlugin
 {
-    public Plugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer)
-        : base(applicationPaths, xmlSerializer)
+    public static Plugin Instance { get; private set; }
+
+    public Plugin()
     {
         Instance = this;
     }
-
-    public static Plugin Instance { get; private set; }
 
     public override string Name => "TMDb Boxset Metadata for Collections";
 
