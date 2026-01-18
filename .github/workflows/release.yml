@@ -32,7 +32,7 @@ jobs:
           echo "PLUGIN_VERSION=$VER" >> $GITHUB_ENV
           echo "Using version: $VER"
 
-      - name: Create NuGet.config (nuget.org + Jellyfin GitHub Packages)
+      - name: Create NuGet.config (ONLY nuget.org + jellyfin GitHub Packages)
         shell: bash
         env:
           JF_NUGET_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
@@ -48,35 +48,55 @@ jobs:
             <packageSources>
               <clear />
               <add key="nuget" value="https://api.nuget.org/v3/index.json" />
-              <add key="jellyfin-github" value="https://nuget.pkg.github.com/jellyfin/index.json" />
+              <add key="jellyfin" value="https://nuget.pkg.github.com/jellyfin/index.json" />
             </packageSources>
-
             <packageSourceCredentials>
-              <jellyfin-github>
+              <jellyfin>
                 <add key="Username" value="Solas79" />
                 <add key="ClearTextPassword" value="%JF_NUGET_TOKEN%" />
-              </jellyfin-github>
+              </jellyfin>
             </packageSourceCredentials>
           </configuration>
           XML
 
-          # Mini-Debug (Token wird NICHT ausgegeben)
-          echo "NuGet.config created. Token length: ${#JF_NUGET_TOKEN}"
+      - name: Debug active NuGet config files + sources
+        shell: bash
+        env:
+          JF_NUGET_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
+        run: |
+          echo "Token length: ${#JF_NUGET_TOKEN}"
+          echo "Workspace: $(pwd)"
+          echo "Show our NuGet.config:"
+          sed -n '1,120p' NuGet.config
+
+          echo ""
+          echo "dotnet nuget list source (FORCED config):"
           dotnet nuget list source --configfile NuGet.config
 
-      - name: Restore
+          echo ""
+          echo "Searching for other NuGet.Config files in repo:"
+          find . -maxdepth 4 -iname "NuGet.Config" -o -iname "nuget.config" || true
+
+      - name: Restore (FORCED config)
+        shell: bash
         env:
           JF_NUGET_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
+          NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
+          NUGET_HTTP_CACHE_PATH: ${{ github.workspace }}/.nuget/http-cache
         run: |
           dotnet restore Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj \
-            --configfile NuGet.config
+            -p:RestoreConfigFile="${{ github.workspace }}/NuGet.config" \
+            --disable-parallel
 
       - name: Build
+        shell: bash
         env:
           JF_NUGET_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
+          NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
+          NUGET_HTTP_CACHE_PATH: ${{ github.workspace }}/.nuget/http-cache
         run: |
           dotnet build Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj \
-            -c Release --no-restore --configfile NuGet.config \
+            -c Release --no-restore \
             /p:Version=${{ env.PLUGIN_VERSION }} \
             /p:AssemblyVersion=${{ env.PLUGIN_VERSION }} \
             /p:FileVersion=${{ env.PLUGIN_VERSION }}
@@ -91,12 +111,9 @@ jobs:
           rm -rf "$OUTDIR"
           mkdir -p "$OUTDIR"
 
-          # Alle DLLs aus Build-Output
           cp Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/bin/Release/net9.0/*.dll "$OUTDIR/"
 
           (cd "$OUTDIR" && zip -9r "../$ZIP" .)
-
-          echo "Created ZIP:"
           ls -l "$ZIP"
 
       - name: Create / Update GitHub Release
