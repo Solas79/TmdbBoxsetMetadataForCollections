@@ -1,17 +1,25 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
 
-    <!-- Stabil bauen, keine Analyzer-Blocker -->
-    <Nullable>disable</Nullable>
-    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <AssemblyName>Jellyfin.Plugin.TmdbBoxsetMetadataForCollections</AssemblyName>
+    <RootNamespace>Jellyfin.Plugin.TmdbBoxsetMetadataForCollections</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../Jellyfin/Jellyfin.Server/Jellyfin.Server.csproj" />
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <!-- Jellyfin / Emby "API" Pakete (bringen MediaBrowser.* Namespaces mit) -->
+    <PackageReference Include="MediaBrowser.Common" Version="10.11.0" />
+    <PackageReference Include="MediaBrowser.Controller" Version="10.11.0" />
+    <PackageReference Include="MediaBrowser.Model" Version="10.11.0" />
+
+    <!-- Jellyfin-spezifische Teile -->
+    <PackageReference Include="Jellyfin.Common" Version="10.11.0" />
+    <PackageReference Include="Jellyfin.Controller" Version="10.11.0" />
+    <PackageReference Include="Jellyfin.Model" Version="10.11.0" />
+    <PackageReference Include="Jellyfin.Data" Version="10.11.0" />
   </ItemGroup>
 
 </Project>
