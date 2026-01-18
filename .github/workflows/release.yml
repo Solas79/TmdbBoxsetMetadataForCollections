@@ -27,18 +27,35 @@ jobs:
       - name: Derive version from tag
         shell: bash
         run: |
-          TAG="${GITHUB_REF_NAME}"   # z.B. v0.1.5
-          VER="${TAG#v}.0"           # -> 0.1.5.0
+          TAG="${GITHUB_REF_NAME}"   # e.g. v0.1.6
+          VER="${TAG#v}.0"           # -> 0.1.6.0
           echo "PLUGIN_VERSION=$VER" >> $GITHUB_ENV
           echo "Using version: $VER"
 
-      - name: Create NuGet.config (ONLY nuget.org + jellyfin GitHub Packages)
+      # ---- DEBUG: finde die Quelle des /download Feeds im Repo ----
+      - name: DEBUG - Search repo for bad jellyfin download feeds
+        shell: bash
+        run: |
+          echo "=== grep: nuget.pkg.github.com/jellyfin/download ==="
+          grep -R "nuget.pkg.github.com/jellyfin/download" -n . || true
+          echo ""
+          echo "=== grep: nuget.pkg.github.com/jellyfin ==="
+          grep -R "nuget.pkg.github.com/jellyfin" -n . || true
+          echo ""
+          echo "=== find NuGet.Config / nuget.config ==="
+          find . -maxdepth 6 \( -iname "NuGet.Config" -o -iname "nuget.config" \) -print || true
+          echo ""
+          echo "=== find Directory.Build.props/targets ==="
+          find . -maxdepth 6 \( -iname "Directory.Build.props" -o -iname "Directory.Build.targets" \) -print || true
+
+      # ---- Erzeuge IMMER eine saubere NuGet.config im Runner ----
+      - name: Create NuGet.config (ONLY nuget.org + jellyfin github packages)
         shell: bash
         env:
           JF_NUGET_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
         run: |
           if [ -z "$JF_NUGET_TOKEN" ]; then
-            echo "ERROR: JF_NUGET_TOKEN secret is missing"
+            echo "ERROR: Missing secret JF_NUGET_TOKEN"
             exit 1
           fi
 
@@ -59,25 +76,17 @@ jobs:
           </configuration>
           XML
 
-      - name: Debug active NuGet config files + sources
+          echo "=== Sources forced via NuGet.config ==="
+          dotnet nuget list source --configfile "${{ github.workspace }}/NuGet.config"
+
+      # ---- Extra-Sicherheit: global sources im Runner NICHT nutzen ----
+      - name: DEBUG - list global NuGet sources (should NOT matter)
         shell: bash
-        env:
-          JF_NUGET_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
         run: |
-          echo "Token length: ${#JF_NUGET_TOKEN}"
-          echo "Workspace: $(pwd)"
-          echo "Show our NuGet.config:"
-          sed -n '1,120p' NuGet.config
+          echo "=== global sources ==="
+          dotnet nuget list source || true
 
-          echo ""
-          echo "dotnet nuget list source (FORCED config):"
-          dotnet nuget list source --configfile NuGet.config
-
-          echo ""
-          echo "Searching for other NuGet.Config files in repo:"
-          find . -maxdepth 4 -iname "NuGet.Config" -o -iname "nuget.config" || true
-
-      - name: Restore (FORCED config)
+      - name: Restore (hard-force RestoreConfigFile)
         shell: bash
         env:
           JF_NUGET_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
@@ -85,15 +94,14 @@ jobs:
           NUGET_HTTP_CACHE_PATH: ${{ github.workspace }}/.nuget/http-cache
         run: |
           dotnet restore Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj \
+            --configfile "${{ github.workspace }}/NuGet.config" \
             -p:RestoreConfigFile="${{ github.workspace }}/NuGet.config" \
-            --disable-parallel
+            -p:RestoreNoCache=true \
+            --disable-parallel \
+            -v minimal
 
       - name: Build
         shell: bash
-        env:
-          JF_NUGET_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
-          NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
-          NUGET_HTTP_CACHE_PATH: ${{ github.workspace }}/.nuget/http-cache
         run: |
           dotnet build Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj \
             -c Release --no-restore \
@@ -107,12 +115,9 @@ jobs:
           set -e
           OUTDIR=out
           ZIP=TmdbBoxsetMetadataForCollections.zip
-
           rm -rf "$OUTDIR"
           mkdir -p "$OUTDIR"
-
           cp Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/bin/Release/net9.0/*.dll "$OUTDIR/"
-
           (cd "$OUTDIR" && zip -9r "../$ZIP" .)
           ls -l "$ZIP"
 
