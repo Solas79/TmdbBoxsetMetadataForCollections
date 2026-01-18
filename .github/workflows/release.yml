@@ -28,49 +28,86 @@ jobs:
       - name: Derive version from tag
         shell: bash
         run: |
+          set -euo pipefail
           TAG="${GITHUB_REF_NAME}"   # z.B. v0.1.7
           VER="${TAG#v}.0"           # -> 0.1.7.0
           echo "PLUGIN_VERSION=$VER" >> $GITHUB_ENV
           echo "Using version: $VER"
 
-      # Wichtig: Jellyfin-Packages kommen (aktuell) aus GitHub Packages.
-      # Dafür braucht es Username + Token (classic PAT) mit read:packages.
-      - name: Configure NuGet auth for GitHub Packages (jellyfin)
+      # --- DEBUG: ist der Secret da? (leakt NICHT den Token) ---
+      - name: DEBUG - verify JF_NUGET_TOKEN present
         shell: bash
         env:
           JF_NUGET_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
         run: |
           set -euo pipefail
-
-          if [ -z "${JF_NUGET_TOKEN}" ]; then
-            echo "JF_NUGET_TOKEN is empty. Check repo Settings -> Secrets -> Actions."
+          if [ -z "${JF_NUGET_TOKEN:-}" ]; then
+            echo "JF_NUGET_TOKEN is EMPTY"
             exit 1
           fi
+          echo "JF_NUGET_TOKEN is present (len=${#JF_NUGET_TOKEN})"
 
-          # Quelle neu setzen (mit Auth)
-          dotnet nuget remove source jellyfin-github 2>/dev/null || true
+      # --- NuGet Quellen NUR über NuGet.config steuern ---
+      - name: Configure NuGet auth for GitHub Packages (jellyfin)
+        shell: bash
+        env:
+          JF_NUGET_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
+          NUGET_USERNAME: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+
+          # Wichtig: wir fassen NUR NuGet.config an (nicht global)
+          dotnet nuget remove source jellyfin-github --configfile NuGet.config 2>/dev/null || true
           dotnet nuget add source "https://nuget.pkg.github.com/jellyfin/index.json" \
             --name "jellyfin-github" \
-            --username "${{ github.actor }}" \
+            --username "${NUGET_USERNAME}" \
             --password "${JF_NUGET_TOKEN}" \
-            --store-password-in-clear-text
+            --store-password-in-clear-text \
+            --configfile NuGet.config
 
-          echo "=== dotnet nuget list source ==="
-          dotnet nuget list source
+          echo "=== dotnet nuget list source (forced NuGet.config) ==="
+          dotnet nuget list source --configfile NuGet.config
 
-      - name: Restore
-        run: dotnet restore Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj --configfile NuGet.config
+      # --- HARTE Diagnose: finde "download/..." im Repo ---
+      - name: DEBUG - search repo for bad jellyfin download feeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== grep: nuget.pkg.github.com/jellyfin/download ==="
+          grep -R "nuget.pkg.github.com/jellyfin/download" -n . || true
+
+          echo "=== find NuGet.Config / nuget.config ==="
+          find . -maxdepth 4 -type f \( -iname "nuget.config" -o -iname "NuGet.config" \) -print
+
+          echo "=== find Directory.Build.* ==="
+          find . -maxdepth 4 -type f \( -iname "Directory.Build.props" -o -iname "Directory.Build.targets" \) -print
+
+      - name: Restore (forced NuGet.config)
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj \
+            --configfile NuGet.config \
+            --no-cache
 
       - name: Build
-        run: dotnet build Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj -c Release --no-restore --configfile NuGet.config /p:Version=${{ env.PLUGIN_VERSION }} /p:AssemblyVersion=${{ env.PLUGIN_VERSION }} /p:FileVersion=${{ env.PLUGIN_VERSION }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet build Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj \
+            -c Release \
+            --no-restore \
+            --configfile NuGet.config \
+            /p:Version=${{ env.PLUGIN_VERSION }} \
+            /p:AssemblyVersion=${{ env.PLUGIN_VERSION }} \
+            /p:FileVersion=${{ env.PLUGIN_VERSION }}
 
       - name: Package ZIP (DLLs)
         shell: bash
         run: |
           set -euo pipefail
-
-          OUTDIR="out"
-          ZIP="Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip"
+          OUTDIR=out
+          ZIP=Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip
 
           rm -rf "$OUTDIR"
           mkdir -p "$OUTDIR"
@@ -79,13 +116,14 @@ jobs:
 
           (cd "$OUTDIR" && zip -9r "../$ZIP" .)
 
-          echo "=== ZIP created: $ZIP ==="
-          ls -l "$ZIP"
+          echo "=== ZIP content ==="
+          unzip -l "$ZIP"
 
-          # MD5 für Jellyfin-Manifest (Checksum-Feld)
-          MD5=$(md5sum "$ZIP" | awk '{print $1}')
-          echo "ZIP_MD5=$MD5" >> $GITHUB_ENV
-          echo "MD5: $MD5"
+          echo "=== ZIP checksums ==="
+          echo "MD5:"
+          md5sum "$ZIP" | awk '{print $1}'
+          echo "SHA256:"
+          sha256sum "$ZIP" | awk '{print $1}'
 
       - name: Create / Update GitHub Release
         uses: softprops/action-gh-release@v2
