@@ -88,6 +88,7 @@ jobs:
           set -euo pipefail
           dotnet restore Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj \
             --configfile NuGet.config \
+            /p:RestoreSources="https://api.nuget.org/v3/index.json;https://nuget.pkg.github.com/jellyfin/index.json" \
             --no-cache
 
       - name: Build
