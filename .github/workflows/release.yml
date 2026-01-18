@@ -16,8 +16,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Setup .NET (SDK 9)
+      # Wichtig: Nur SDK 9 verwenden (Jellyfin 10.11.x Plugins -> net8/net9 je nach Setup)
+      - name: Setup .NET 9
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "9.0.x"
@@ -26,29 +29,32 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF_NAME}"          # z.B. v0.1.7
-          VER="${TAG#v}.0"                  # -> 0.1.7.0
-          echo "PLUGIN_VERSION=$VER" >> "$GITHUB_ENV"
-          echo "PLUGIN_TAG=$TAG" >> "$GITHUB_ENV"
+          TAG="${GITHUB_REF_NAME}"     # z.B. v0.1.7
+          VER="${TAG#v}.0"             # -> 0.1.7.0
+          echo "PLUGIN_VERSION=$VER" >> $GITHUB_ENV
           echo "Using version: $VER"
 
-      - name: Verify JF_NUGET_TOKEN present (length only)
+      # Token-Pruefung ohne Leak
+      - name: DEBUG - verify JF_NUGET_TOKEN present (length only)
         shell: bash
+        env:
+          JF_NUGET_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
         run: |
           set -euo pipefail
-          if [ -z "${{ secrets.JF_NUGET_TOKEN }}" ]; then
-            echo "JF_NUGET_TOKEN is missing"
+          if [ -z "${JF_NUGET_TOKEN:-}" ]; then
+            echo "JF_NUGET_TOKEN is MISSING"
             exit 1
           fi
-          echo "JF_NUGET_TOKEN is present (len=${#TOKEN})" 2>/dev/null || true
-        env:
-          TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
+          echo "JF_NUGET_TOKEN is present (len=${#JF_NUGET_TOKEN})"
 
+      # NuGet config komplett erzwingen (CLEAR + nur 2 feeds)
       - name: Create NuGet.auth.config (ONLY nuget.org + jellyfin GitHub Packages)
         shell: bash
+        env:
+          JF_NUGET_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
         run: |
           set -euo pipefail
-          cat > NuGet.auth.config <<'EOF'
+          cat > NuGet.auth.config << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <configuration>
             <packageSources>
@@ -59,7 +65,7 @@ jobs:
 
             <packageSourceCredentials>
               <jellyfin>
-                <add key="Username" value="token" />
+                <add key="Username" value="Solas79" />
                 <add key="ClearTextPassword" value="%JF_NUGET_TOKEN%" />
               </jellyfin>
             </packageSourceCredentials>
@@ -67,52 +73,91 @@ jobs:
           EOF
 
           echo "NuGet.auth.config created"
-          dotnet nuget list source --configfile NuGet.auth.config
 
+      # Debug: Welche Quellen nimmt NuGet wirklich?
+      - name: DEBUG - list NuGet sources (forced config)
+        shell: bash
         env:
           JF_NUGET_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
-
-      - name: Restore (FORCED NuGet.auth.config)
         run: |
+          set -euo pipefail
+          dotnet nuget list source --configfile NuGet.auth.config
+
+      # Debug: Preprocessed MSBuild Projekt dumpen und nach /download suchen
+      - name: DEBUG - dump preprocessed MSBuild project and grep download feed
+        shell: bash
+        env:
+          JF_NUGET_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
+        run: |
+          set -euo pipefail
+          dotnet msbuild Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj \
+            /pp:pp.xml \
+            /p:Configuration=Release
+
+          echo "=== grep nuget.pkg.github.com/jellyfin/download in pp.xml ==="
+          grep -n "nuget.pkg.github.com/jellyfin/download" pp.xml || true
+
+          echo "=== grep RestoreAdditionalProjectSources / RestoreSources in pp.xml ==="
+          grep -n "RestoreAdditionalProjectSources" pp.xml || true
+          grep -n "RestoreSources" pp.xml || true
+
+      # Restore: HARD override, damit kein /download feed reinkommt
+      - name: Restore (HARD override sources)
+        shell: bash
+        env:
+          JF_NUGET_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
+        run: |
+          set -euo pipefail
           dotnet restore Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj \
-            --configfile NuGet.auth.config
+            --configfile NuGet.auth.config \
+            /p:RestoreSources="https://api.nuget.org/v3/index.json;https://nuget.pkg.github.com/jellyfin/index.json" \
+            /p:RestoreAdditionalProjectSources=
 
-      - name: Build (Release)
+      - name: Build
+        shell: bash
+        env:
+          JF_NUGET_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
         run: |
+          set -euo pipefail
           dotnet build Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj \
             -c Release --no-restore \
             /p:Version=${{ env.PLUGIN_VERSION }} \
             /p:AssemblyVersion=${{ env.PLUGIN_VERSION }} \
             /p:FileVersion=${{ env.PLUGIN_VERSION }}
 
-      - name: Package ZIP (DLLs)
+      # ZIP: NUR DLLs aus dem Target-Output, keine Unterordner
+      - name: Package ZIP (DLLs only, flat)
         shell: bash
         run: |
           set -euo pipefail
-          OUTDIR=out
-          ZIP=Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip
+          OUTDIR="out"
+          ZIP="Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip"
 
           rm -rf "$OUTDIR"
           mkdir -p "$OUTDIR"
 
-          # WICHTIG: deine DLLs liegen i.d.R. hier:
-          cp Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/bin/Release/net9.0/*.dll "$OUTDIR/"
+          # net9.0 oder net8.0: nimm was existiert
+          if ls Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/bin/Release/net9.0/*.dll 1>/dev/null 2>&1; then
+            cp Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/bin/Release/net9.0/*.dll "$OUTDIR/"
+          elif ls Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/bin/Release/net8.0/*.dll 1>/dev/null 2>&1; then
+            cp Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/bin/Release/net8.0/*.dll "$OUTDIR/"
+          else
+            echo "ERROR: No DLLs found in bin/Release/net9.0 or net8.0"
+            find Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/bin/Release -maxdepth 3 -type f -name "*.dll" -print || true
+            exit 1
+          fi
 
           (cd "$OUTDIR" && zip -9r "../$ZIP" .)
-
-          echo "ZIP created: $ZIP"
+          echo "Created $ZIP"
           ls -lah "$ZIP"
+          echo "Contents:"
+          unzip -l "$ZIP"
 
-          # Jellyfin manifest checksum ist i.d.R. MD5 (32 hex)
-          MD5=$(md5sum "$ZIP" | awk '{print $1}')
-          echo "ZIP_MD5=$MD5" >> "$GITHUB_ENV"
-          echo "MD5: $MD5"
-
-      - name: Create / Update GitHub Release (upload zip)
+      - name: Create / Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: TMDb Boxset Metadata for Collections ${{ env.PLUGIN_TAG }}
-          tag_name: ${{ env.PLUGIN_TAG }}
+          name: TMDb Boxset Metadata for Collections ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
           files: Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
