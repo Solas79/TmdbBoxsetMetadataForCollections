@@ -29,25 +29,43 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF_NAME}"     # z.B. v0.1.7
-          VER="${TAG#v}.0"             # -> 0.1.7.0
+          TAG="${GITHUB_REF_NAME}"   # z.B. v0.1.7
+          VER="${TAG#v}.0"           # -> 0.1.7.0
           echo "PLUGIN_VERSION=$VER" >> $GITHUB_ENV
           echo "Using version: $VER"
 
       - name: DEBUG - verify JF_NUGET_TOKEN present
         shell: bash
+        env:
+          JF_NUGET_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
         run: |
           set -euo pipefail
-          if [ -z "${{ secrets.JF_NUGET_TOKEN }}" ]; then
+          if [ -z "$JF_NUGET_TOKEN" ]; then
             echo "JF_NUGET_TOKEN is EMPTY"
             exit 1
           fi
-          echo "JF_NUGET_TOKEN is present (len=${#{{ secrets.JF_NUGET_TOKEN }}})"
+          echo "JF_NUGET_TOKEN is present (len=${#JF_NUGET_TOKEN})"
 
-      - name: Create NuGet.config (with auth)
+      - name: DEBUG - search repo for bad jellyfin download feeds
         shell: bash
         run: |
           set -euo pipefail
+          echo "=== grep: nuget.pkg.github.com/jellyfin/download ==="
+          grep -R "nuget.pkg.github.com/jellyfin/download" -n . || true
+          echo
+          echo "=== find NuGet.Config / nuget.config ==="
+          find . -maxdepth 3 -iname "nuget.config" -o -iname "NuGet.config" || true
+          echo
+          echo "=== find Directory.Build.* ==="
+          find . -maxdepth 3 -iname "Directory.Build.props" -o -iname "Directory.Build.targets" || true
+
+      - name: Create NuGet.auth.config (nuget.org + jellyfin GitHub Packages)
+        shell: bash
+        env:
+          JF_NUGET_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
+        run: |
+          set -euo pipefail
+
           cat > NuGet.auth.config <<'XML'
           <?xml version="1.0" encoding="utf-8"?>
           <configuration>
@@ -66,29 +84,23 @@ jobs:
           </configuration>
           XML
 
-          # Username = github.actor, Token = Secret
+          # Username: github.actor (der User, der den Workflow ausführt)
           sed -i "s/__USERNAME__/${{ github.actor }}/g" NuGet.auth.config
-          sed -i "s/__TOKEN__/${{ secrets.JF_NUGET_TOKEN }}/g" NuGet.auth.config
+          # Token: aus Secret
+          sed -i "s/__TOKEN__/${JF_NUGET_TOKEN}/g" NuGet.auth.config
 
           echo "=== dotnet nuget list source (forced) ==="
           dotnet nuget list source --configfile NuGet.auth.config
 
-      - name: Restore (hard sources)
-        shell: bash
+      - name: Restore (forced NuGet.auth.config)
         run: |
-          set -euo pipefail
           dotnet restore Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj \
-            --configfile NuGet.auth.config \
-            /p:RestoreSources="https://api.nuget.org/v3/index.json;https://nuget.pkg.github.com/jellyfin/index.json" \
-            --no-cache
+            --configfile NuGet.auth.config
 
-      - name: Build
-        shell: bash
+      - name: Build (Release)
         run: |
-          set -euo pipefail
           dotnet build Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj \
-            -c Release \
-            --no-restore \
+            -c Release --no-restore --configfile NuGet.auth.config \
             /p:Version=${{ env.PLUGIN_VERSION }} \
             /p:AssemblyVersion=${{ env.PLUGIN_VERSION }} \
             /p:FileVersion=${{ env.PLUGIN_VERSION }}
@@ -103,10 +115,14 @@ jobs:
           rm -rf "$OUTDIR"
           mkdir -p "$OUTDIR"
 
+          # Standard: net9.0 output
           cp Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/bin/Release/net9.0/*.dll "$OUTDIR/"
 
           (cd "$OUTDIR" && zip -9r "../$ZIP" .)
-          ls -l
+          echo "=== ZIP created ==="
+          ls -l "$ZIP"
+          echo "=== ZIP content ==="
+          unzip -l "$ZIP"
 
       - name: Create / Update GitHub Release
         uses: softprops/action-gh-release@v2
