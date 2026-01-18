@@ -1,21 +1,27 @@
 using System;
 using MediaBrowser.Common.Plugins;
-using MediaBrowser.Model.IO;
-using MediaBrowser.Model.Serialization;
 
 namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections;
 
+/// <summary>
+/// Plugin entry point.
+/// </summary>
 public sealed class Plugin : BasePlugin
 {
-    public Plugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer)
-        : base(applicationPaths, xmlSerializer)
+    /// <summary>
+    /// Initializes a new instance of the <see cref="Plugin"/> class.
+    /// </summary>
+    public Plugin()
     {
     }
 
+    /// <inheritdoc />
     public override string Name => "TMDb Boxset Metadata for Collections";
 
+    /// <inheritdoc />
     public override Guid Id => new Guid("b11c1cde-4c6e-4c55-b4a5-5a4b95f7c801");
 
+    /// <inheritdoc />
     public override string Description =>
-        "Manual task: copies Movie.ProviderIds['TmdbCollection'] into BoxSet.ProviderIds['Tmdb'] so metadata/artwork can be fetched.";
+        "Manual task: sets ProviderIds['Tmdb'] on BoxSets based on movies' ProviderIds['TmdbCollection'].";
 }
