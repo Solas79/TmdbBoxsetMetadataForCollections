@@ -1,7 +1,14 @@
 <Project>
   <PropertyGroup>
-    <!-- Deaktiviert ALLE impliziten Restore-Feeds von Jellyfin -->
+    <!-- Kill Jellyfin injected download / fallback feeds -->
     <RestoreAdditionalProjectSources></RestoreAdditionalProjectSources>
-    <RestoreAdditionalProjectFallbackFolders></RestoreAdditionalProjectFallbackFolders>
+    <RestoreFallbackFolders></RestoreFallbackFolders>
+    <DisableImplicitNuGetFallbackFolder>true</DisableImplicitNuGetFallbackFolder>
+
+    <!-- Hard override -->
+    <RestoreSources>
+      https://api.nuget.org/v3/index.json;
+      https://nuget.pkg.github.com/jellyfin/index.json
+    </RestoreSources>
   </PropertyGroup>
 </Project>
