@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  packages: read
 
 jobs:
   build:
@@ -27,105 +28,41 @@ jobs:
       - name: Derive version from tag
         shell: bash
         run: |
-          TAG="${GITHUB_REF_NAME}"   # e.g. v0.1.6
-          VER="${TAG#v}.0"           # -> 0.1.6.0
+          TAG="${GITHUB_REF_NAME}"
+          VER="${TAG#v}.0"
           echo "PLUGIN_VERSION=$VER" >> $GITHUB_ENV
           echo "Using version: $VER"
 
-      # ---- DEBUG: finde die Quelle des /download Feeds im Repo ----
-      - name: DEBUG - Search repo for bad jellyfin download feeds
-        shell: bash
-        run: |
-          echo "=== grep: nuget.pkg.github.com/jellyfin/download ==="
-          grep -R "nuget.pkg.github.com/jellyfin/download" -n . || true
-          echo ""
-          echo "=== grep: nuget.pkg.github.com/jellyfin ==="
-          grep -R "nuget.pkg.github.com/jellyfin" -n . || true
-          echo ""
-          echo "=== find NuGet.Config / nuget.config ==="
-          find . -maxdepth 6 \( -iname "NuGet.Config" -o -iname "nuget.config" \) -print || true
-          echo ""
-          echo "=== find Directory.Build.props/targets ==="
-          find . -maxdepth 6 \( -iname "Directory.Build.props" -o -iname "Directory.Build.targets" \) -print || true
-
-      # ---- Erzeuge IMMER eine saubere NuGet.config im Runner ----
-      - name: Create NuGet.config (ONLY nuget.org + jellyfin github packages)
-        shell: bash
+      - name: Restore
         env:
-          JF_NUGET_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ -z "$JF_NUGET_TOKEN" ]; then
-            echo "ERROR: Missing secret JF_NUGET_TOKEN"
-            exit 1
-          fi
-
-          cat > NuGet.config <<'XML'
-          <?xml version="1.0" encoding="utf-8"?>
-          <configuration>
-            <packageSources>
-              <clear />
-              <add key="nuget" value="https://api.nuget.org/v3/index.json" />
-              <add key="jellyfin" value="https://nuget.pkg.github.com/jellyfin/index.json" />
-            </packageSources>
-            <packageSourceCredentials>
-              <jellyfin>
-                <add key="Username" value="Solas79" />
-                <add key="ClearTextPassword" value="%JF_NUGET_TOKEN%" />
-              </jellyfin>
-            </packageSourceCredentials>
-          </configuration>
-          XML
-
-          echo "=== Sources forced via NuGet.config ==="
-          dotnet nuget list source --configfile "${{ github.workspace }}/NuGet.config"
-
-      # ---- Extra-Sicherheit: global sources im Runner NICHT nutzen ----
-      - name: DEBUG - list global NuGet sources (should NOT matter)
-        shell: bash
-        run: |
-          echo "=== global sources ==="
-          dotnet nuget list source || true
-
-      - name: Restore (hard-force RestoreConfigFile)
-        shell: bash
-        env:
-          JF_NUGET_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
-          NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
-          NUGET_HTTP_CACHE_PATH: ${{ github.workspace }}/.nuget/http-cache
-        run: |
-          dotnet restore Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj \
-            --configfile "${{ github.workspace }}/NuGet.config" \
-            -p:RestoreConfigFile="${{ github.workspace }}/NuGet.config" \
-            -p:RestoreNoCache=true \
-            --disable-parallel \
-            -v minimal
+          dotnet restore \
+            Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj \
+            --configfile NuGet.config
 
       - name: Build
-        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          dotnet build Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj \
-            -c Release --no-restore \
+          dotnet build \
+            Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj \
+            -c Release \
+            --no-restore \
             /p:Version=${{ env.PLUGIN_VERSION }} \
             /p:AssemblyVersion=${{ env.PLUGIN_VERSION }} \
             /p:FileVersion=${{ env.PLUGIN_VERSION }}
 
-      - name: Package ZIP (DLLs)
+      - name: Package ZIP
         shell: bash
         run: |
-          set -e
-          OUTDIR=out
-          ZIP=TmdbBoxsetMetadataForCollections.zip
-          rm -rf "$OUTDIR"
-          mkdir -p "$OUTDIR"
-          cp Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/bin/Release/net9.0/*.dll "$OUTDIR/"
-          (cd "$OUTDIR" && zip -9r "../$ZIP" .)
-          ls -l "$ZIP"
+          mkdir -p out
+          cp Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/bin/Release/net9.0/*.dll out/
+          (cd out && zip -9r ../TmdbBoxsetMetadataForCollections.zip .)
 
-      - name: Create / Update GitHub Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: TMDb Boxset Metadata for Collections ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
           files: TmdbBoxsetMetadataForCollections.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
