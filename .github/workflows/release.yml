@@ -27,18 +27,21 @@ jobs:
       - name: Derive version from tag
         shell: bash
         run: |
-          TAG="${GITHUB_REF_NAME}"   # z.B. v0.1.2
-          VER="${TAG#v}.0"           # -> 0.1.2.0
+          TAG="${GITHUB_REF_NAME}"   # z.B. v0.1.5
+          VER="${TAG#v}.0"           # -> 0.1.5.0
           echo "PLUGIN_VERSION=$VER" >> $GITHUB_ENV
           echo "Using version: $VER"
 
-      # >>> WICHTIG: NuGet.config im Runner erzeugen (mit GitHub Packages + Token)
-      - name: Create NuGet.config (with Jellyfin GitHub Packages)
+      - name: Create NuGet.config (nuget.org + Jellyfin GitHub Packages)
         shell: bash
         env:
-          GH_USER: ${{ github.actor }}
-          GH_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
+          JF_NUGET_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
         run: |
+          if [ -z "$JF_NUGET_TOKEN" ]; then
+            echo "ERROR: JF_NUGET_TOKEN secret is missing"
+            exit 1
+          fi
+
           cat > NuGet.config <<'XML'
           <?xml version="1.0" encoding="utf-8"?>
           <configuration>
@@ -50,38 +53,33 @@ jobs:
 
             <packageSourceCredentials>
               <jellyfin-github>
-                <add key="Username" value="${GH_USER}" />
-                <add key="ClearTextPassword" value="${GH_TOKEN}" />
+                <add key="Username" value="Solas79" />
+                <add key="ClearTextPassword" value="%JF_NUGET_TOKEN%" />
               </jellyfin-github>
             </packageSourceCredentials>
           </configuration>
           XML
 
-          echo "NuGet.config created:"
-          sed -e 's/ClearTextPassword.*/ClearTextPassword" value="***" \/>/g' NuGet.config
-
-      - name: Debug NuGet sources
-        run: |
-          echo "Has token? (length only)"
-          python - <<'PY'
-          import os
-          t=os.environ.get("GH_TOKEN","")
-          print(len(t))
-          PY
+          # Mini-Debug (Token wird NICHT ausgegeben)
+          echo "NuGet.config created. Token length: ${#JF_NUGET_TOKEN}"
           dotnet nuget list source --configfile NuGet.config
-        env:
-          GH_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
-
 
       - name: Restore
-        run: dotnet restore Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj --configfile NuGet.config
+        env:
+          JF_NUGET_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
+        run: |
+          dotnet restore Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj \
+            --configfile NuGet.config
 
       - name: Build
-        run: dotnet build Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj \
-          -c Release --no-restore --configfile NuGet.config \
-          /p:Version=${{ env.PLUGIN_VERSION }} \
-          /p:AssemblyVersion=${{ env.PLUGIN_VERSION }} \
-          /p:FileVersion=${{ env.PLUGIN_VERSION }}
+        env:
+          JF_NUGET_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
+        run: |
+          dotnet build Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj \
+            -c Release --no-restore --configfile NuGet.config \
+            /p:Version=${{ env.PLUGIN_VERSION }} \
+            /p:AssemblyVersion=${{ env.PLUGIN_VERSION }} \
+            /p:FileVersion=${{ env.PLUGIN_VERSION }}
 
       - name: Package ZIP (DLLs)
         shell: bash
@@ -93,10 +91,12 @@ jobs:
           rm -rf "$OUTDIR"
           mkdir -p "$OUTDIR"
 
-          # Plugin DLL + Abhängigkeiten aus dem Build-Output
+          # Alle DLLs aus Build-Output
           cp Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/bin/Release/net9.0/*.dll "$OUTDIR/"
 
           (cd "$OUTDIR" && zip -9r "../$ZIP" .)
+
+          echo "Created ZIP:"
           ls -l "$ZIP"
 
       - name: Create / Update GitHub Release
