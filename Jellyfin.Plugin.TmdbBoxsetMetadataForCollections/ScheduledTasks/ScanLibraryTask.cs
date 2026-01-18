@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
 
@@ -15,11 +16,16 @@ namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.ScheduledTasks;
 public sealed class ScanLibraryTask : IScheduledTask
 {
     private readonly ILibraryManager libraryManager;
+    private readonly IItemRepository itemRepository;
     private readonly ILogger<ScanLibraryTask> logger;
 
-    public ScanLibraryTask(ILibraryManager libraryManager, ILogger<ScanLibraryTask> logger)
+    public ScanLibraryTask(
+        ILibraryManager libraryManager,
+        IItemRepository itemRepository,
+        ILogger<ScanLibraryTask> logger)
     {
         this.libraryManager = libraryManager;
+        this.itemRepository = itemRepository;
         this.logger = logger;
     }
 
@@ -38,7 +44,6 @@ public sealed class ScanLibraryTask : IScheduledTask
         progress.Report(0);
         logger.LogInformation("[TMDB-COLLECTION] Manual scan started.");
 
-        // Alle BoxSets (Collections)
         var boxSets = libraryManager.GetItemList(new InternalItemsQuery
         {
             IncludeItemTypes = new[] { BaseItemKind.BoxSet },
@@ -57,20 +62,13 @@ public sealed class ScanLibraryTask : IScheduledTask
 
             try
             {
-                if (boxSet == null)
-                {
-                    continue;
-                }
-
-                // Skip wenn Tmdb schon da ist
-                if (boxSet.ProviderIds != null
+                if (boxSet?.ProviderIds != null
                     && boxSet.ProviderIds.TryGetValue("Tmdb", out var existingTmdb)
                     && !string.IsNullOrWhiteSpace(existingTmdb))
                 {
                     continue;
                 }
 
-                // Movies in diesem BoxSet holen
                 var movies = libraryManager.GetItemList(new InternalItemsQuery
                 {
                     ParentId = boxSet.Id,
@@ -83,7 +81,6 @@ public sealed class ScanLibraryTask : IScheduledTask
                     continue;
                 }
 
-                // Erste Movie mit TmdbCollection finden
                 string tmdbCollectionId = null;
 
                 foreach (var movie in movies)
@@ -105,7 +102,6 @@ public sealed class ScanLibraryTask : IScheduledTask
                     continue;
                 }
 
-                // harte Prüfung: nur Zahlen
                 if (!long.TryParse(tmdbCollectionId, NumberStyles.Integer, CultureInfo.InvariantCulture, out _))
                 {
                     logger.LogWarning("[TMDB-COLLECTION] BoxSet '{Name}' got non-numeric TmdbCollection='{Id}'. Skipping.",
@@ -113,7 +109,6 @@ public sealed class ScanLibraryTask : IScheduledTask
                     continue;
                 }
 
-                // In BoxSet schreiben: ProviderIds["Tmdb"] = (Movie.TmdbCollection)
                 if (boxSet.ProviderIds == null)
                 {
                     boxSet.ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -121,8 +116,8 @@ public sealed class ScanLibraryTask : IScheduledTask
 
                 boxSet.ProviderIds["Tmdb"] = tmdbCollectionId;
 
-                // Persistieren: in 10.11.x ist UpdateToRepository der zuverlässigste Weg
-                boxSet.UpdateToRepository(ItemUpdateType.MetadataEdit, cancellationToken);
+                // Persistieren in DB/FS (Jellyfin kümmert sich um collection.xml bei FileSystem-Items)
+                itemRepository.SaveItem(boxSet, cancellationToken);
 
                 updated++;
                 logger.LogInformation("[TMDB-COLLECTION] Updated BoxSet '{Name}' => ProviderIds['Tmdb']={Id}",
