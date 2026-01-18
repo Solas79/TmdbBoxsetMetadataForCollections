@@ -18,6 +18,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: true
 
       - name: Setup .NET 9
         uses: actions/setup-dotnet@v4
@@ -30,116 +31,67 @@ jobs:
           TAG="${GITHUB_REF_NAME}"   # z.B. v0.1.7
           VER="${TAG#v}.0"           # -> 0.1.7.0
           echo "PLUGIN_VERSION=$VER" >> $GITHUB_ENV
-          echo "PLUGIN_TAG=$TAG" >> $GITHUB_ENV
           echo "Using version: $VER"
 
-      # GitHub Packages auth für Jellyfin.Controller (kommt von nuget.pkg.github.com/jellyfin)
-      - name: Add GitHub Packages source with auth
+      # Wichtig: Jellyfin-Packages kommen (aktuell) aus GitHub Packages.
+      # Dafür braucht es Username + Token (classic PAT) mit read:packages.
+      - name: Configure NuGet auth for GitHub Packages (jellyfin)
         shell: bash
         env:
-          GH_PACKAGES_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
+          JF_NUGET_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
         run: |
+          set -euo pipefail
+
+          if [ -z "${JF_NUGET_TOKEN}" ]; then
+            echo "JF_NUGET_TOKEN is empty. Check repo Settings -> Secrets -> Actions."
+            exit 1
+          fi
+
+          # Quelle neu setzen (mit Auth)
           dotnet nuget remove source jellyfin-github 2>/dev/null || true
           dotnet nuget add source "https://nuget.pkg.github.com/jellyfin/index.json" \
             --name "jellyfin-github" \
             --username "${{ github.actor }}" \
-            --password "$GH_PACKAGES_TOKEN" \
+            --password "${JF_NUGET_TOKEN}" \
             --store-password-in-clear-text
+
+          echo "=== dotnet nuget list source ==="
+          dotnet nuget list source
 
       - name: Restore
         run: dotnet restore Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj --configfile NuGet.config
 
       - name: Build
-        run: dotnet build Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj \
-          -c Release --no-restore --configfile NuGet.config \
-          /p:Version=${{ env.PLUGIN_VERSION }} \
-          /p:AssemblyVersion=${{ env.PLUGIN_VERSION }} \
-          /p:FileVersion=${{ env.PLUGIN_VERSION }}
+        run: dotnet build Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj -c Release --no-restore --configfile NuGet.config /p:Version=${{ env.PLUGIN_VERSION }} /p:AssemblyVersion=${{ env.PLUGIN_VERSION }} /p:FileVersion=${{ env.PLUGIN_VERSION }}
 
-      - name: Package ZIP (DLL only)
+      - name: Package ZIP (DLLs)
         shell: bash
         run: |
-          set -e
-          OUTDIR=out
-          ZIP=Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip
-          DLLDIR="Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/bin/Release/net9.0"
+          set -euo pipefail
+
+          OUTDIR="out"
+          ZIP="Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip"
 
           rm -rf "$OUTDIR"
           mkdir -p "$OUTDIR"
 
-          cp "$DLLDIR"/*.dll "$OUTDIR"/
+          cp Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/bin/Release/net9.0/*.dll "$OUTDIR/"
 
           (cd "$OUTDIR" && zip -9r "../$ZIP" .)
+
+          echo "=== ZIP created: $ZIP ==="
           ls -l "$ZIP"
 
-      - name: Compute MD5 (lowercase)
-        id: md5
-        shell: bash
-        run: |
-          echo "md5=$(md5sum Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip | awk '{print tolower($1)}')" >> $GITHUB_OUTPUT
+          # MD5 für Jellyfin-Manifest (Checksum-Feld)
+          MD5=$(md5sum "$ZIP" | awk '{print $1}')
+          echo "ZIP_MD5=$MD5" >> $GITHUB_ENV
+          echo "MD5: $MD5"
 
-      - name: Generate manifest.json
-        shell: bash
-        run: |
-          TAG="${{ env.PLUGIN_TAG }}"
-          VER="${{ env.PLUGIN_VERSION }}"
-          CHECKSUM="${{ steps.md5.outputs.md5 }}"
-          TS="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-
-          cat > manifest.json <<JSON
-          [
-            {
-              "category": "Metadata",
-              "guid": "b11c1cde-4c6e-4c55-b4a5-5a4b95f7c801",
-              "name": "TMDb Boxset Metadata for Collections",
-              "owner": "Solas79",
-              "overview": "Copies TMDbCollection IDs from movies into BoxSets.",
-              "description": "Sets TMDbCollection on BoxSets and triggers metadata/image refresh via scheduled task.",
-              "versions": [
-                {
-                  "version": "${VER}",
-                  "targetAbi": "10.11.0.0",
-                  "sourceUrl": "https://github.com/${{ github.repository }}/releases/download/${TAG}/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip",
-                  "checksum": "${CHECKSUM}",
-                  "timestamp": "${TS}",
-                  "changelog": "Automatischer Build für ${TAG} (Jellyfin 10.11.x)"
-                }
-              ]
-            }
-          ]
-          JSON
-
-          cat manifest.json
-
-      - name: Create / Update GitHub Release (attach ZIP + manifest.json)
+      - name: Create / Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: TMDb Boxset Metadata for Collections ${{ env.PLUGIN_TAG }}
-          tag_name: ${{ env.PLUGIN_TAG }}
-          files: |
-            Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip
-            manifest.json
+          name: TMDb Boxset Metadata for Collections ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          files: Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Commit manifest.json to main
-        shell: bash
-        run: |
-          set -e
-          TMP="$(mktemp)"
-          cp -f manifest.json "$TMP"
-
-          git fetch origin main
-          git checkout -B main origin/main
-
-          mv -f "$TMP" manifest.json
-          git add manifest.json
-
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -m "Update manifest for ${{ env.PLUGIN_TAG }}"
-            git push origin main
-          fi
