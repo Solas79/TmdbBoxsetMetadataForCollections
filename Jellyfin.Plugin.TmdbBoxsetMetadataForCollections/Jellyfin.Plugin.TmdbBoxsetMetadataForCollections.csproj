@@ -1,16 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>disable</Nullable>
-    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
-    <AssemblyVersion>0.1.6.0</AssemblyVersion>
-    <FileVersion>0.1.6.0</FileVersion>
-    <Version>0.1.6.0</Version>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Jellyfin.Controller" Version="10.11.5" />
+    <PackageReference Include="Jellyfin.Common" Version="10.11.5" />
+    <PackageReference Include="Jellyfin.Model" Version="10.11.5" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
+
 </Project>
