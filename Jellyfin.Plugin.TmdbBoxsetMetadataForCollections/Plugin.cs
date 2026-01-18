@@ -1,21 +1,32 @@
 using System;
 using MediaBrowser.Common.Plugins;
+using MediaBrowser.Model.IO;
+using MediaBrowser.Model.Serialization;
 
 namespace Jellyfin.Plugin.TmdbBoxsetMetadataForCollections;
 
+/// <summary>
+/// Plugin entry point.
+/// </summary>
 public sealed class Plugin : BasePlugin
 {
-    public static Plugin Instance { get; private set; }
-
-    public Plugin()
+    /// <summary>
+    /// Initializes a new instance of the <see cref="Plugin"/> class.
+    /// </summary>
+    /// <param name="applicationPaths">Application paths.</param>
+    /// <param name="xmlSerializer">XML serializer.</param>
+    public Plugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer)
+        : base(applicationPaths, xmlSerializer)
     {
-        Instance = this;
     }
 
+    /// <inheritdoc />
     public override string Name => "TMDb Boxset Metadata for Collections";
 
+    /// <inheritdoc />
     public override Guid Id => new Guid("b11c1cde-4c6e-4c55-b4a5-5a4b95f7c801");
 
+    /// <inheritdoc />
     public override string Description =>
-        "Adds TMDb Box Set ID to existing Jellyfin collections by reading TmdbCollection from contained movies. Manual task only.";
+        "Sets ProviderIds['Tmdb'] on BoxSets using first contained movie's ProviderIds['TmdbCollection'] (manual task).";
 }
