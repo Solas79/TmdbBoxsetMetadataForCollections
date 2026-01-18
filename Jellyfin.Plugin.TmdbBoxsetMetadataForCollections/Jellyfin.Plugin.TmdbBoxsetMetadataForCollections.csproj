@@ -3,9 +3,8 @@
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>disable</Nullable>
-    <ImplicitUsings>disable</ImplicitUsings>
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>
