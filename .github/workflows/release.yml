@@ -60,6 +60,19 @@ jobs:
           echo "NuGet.config created:"
           sed -e 's/ClearTextPassword.*/ClearTextPassword" value="***" \/>/g' NuGet.config
 
+      - name: Debug NuGet sources
+        run: |
+          echo "Has token? (length only)"
+          python - <<'PY'
+          import os
+          t=os.environ.get("GH_TOKEN","")
+          print(len(t))
+          PY
+          dotnet nuget list source --configfile NuGet.config
+        env:
+          GH_TOKEN: ${{ secrets.JF_NUGET_TOKEN }}
+
+
       - name: Restore
         run: dotnet restore Jellyfin.Plugin.TmdbBoxsetMetadataForCollections/Jellyfin.Plugin.TmdbBoxsetMetadataForCollections.csproj --configfile NuGet.config
 
