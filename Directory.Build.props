@@ -1,9 +1,7 @@
 <Project>
   <PropertyGroup>
-    <!-- HARD OVERRIDE: nur diese beiden Quellen -->
-    <RestoreSources>
-      https://api.nuget.org/v3/index.json;
-      https://nuget.pkg.github.com/jellyfin/index.json
-    </RestoreSources>
+    <!-- Deaktiviert ALLE impliziten Restore-Feeds von Jellyfin -->
+    <RestoreAdditionalProjectSources></RestoreAdditionalProjectSources>
+    <RestoreAdditionalProjectFallbackFolders></RestoreAdditionalProjectFallbackFolders>
   </PropertyGroup>
 </Project>
